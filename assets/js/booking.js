@@ -383,7 +383,7 @@
       try { localStorage.setItem(SAVED, JSON.stringify({ name: payload.name, phone: payload.phone, email: payload.email })); } catch {}
       // mark the slot as taken right away (the next refresh confirms it)
       (cache.days[payload.date] = cache.days[payload.date] || []).push({ start: payload.time, end: toTime(toMin(payload.time) + state.service.duration) });
-      done(payload, result.id);
+      done(payload, result.id, result.mail !== false);
     } catch (ex) {
       err.innerHTML = `Δεν ήταν δυνατή η σύνδεση. Δοκίμασε ξανά ή κάλεσε στο ${phoneLink}.`;
     } finally {
@@ -391,11 +391,13 @@
     }
   });
 
-  function done(p, id) {
+  function done(p, id, mailed) {
     const s = state.service, end = toTime(toMin(p.time) + s.duration);
     $("#doneText").innerHTML = DEMO
       ? `<b>${s.name}</b>, ${prettyDate(state.date)} στις <b>${p.time}</b>.<br>(Λειτουργία επίδειξης: όταν συνδεθεί το email του κουρείου, εδώ θα σταλεί αυτόματα επιβεβαίωση στο <b>${p.email}</b> και ειδοποίηση στον Μάκη.)`
-      : `<b>${s.name}</b>, ${prettyDate(state.date)} στις <b>${p.time}</b>.<br>Στείλαμε επιβεβαίωση στο <b>${p.email}</b>${id ? ` (κωδικός ${id})` : ""}. Τα λέμε σύντομα!`;
+      : mailed
+        ? `<b>${s.name}</b>, ${prettyDate(state.date)} στις <b>${p.time}</b>.<br>Στείλαμε επιβεβαίωση στο <b>${p.email}</b>${id ? ` (κωδικός ${id})` : ""}. Τα λέμε σύντομα!`
+        : `<b>${s.name}</b>, ${prettyDate(state.date)} στις <b>${p.time}</b>${id ? ` (κωδικός <b>${id}</b>)` : ""}.<br>Το ραντεβού σου είναι κλεισμένο, αλλά αυτή τη φορά δεν μπορέσαμε να στείλουμε email επιβεβαίωσης. Πρόσθεσέ το στο ημερολόγιό σου με το κουμπί παρακάτω. Για οτιδήποτε κάλεσε στο ${phoneLink}.`;
     const dt = t => p.date.replace(/-/g, "") + "T" + t.replace(":", "") + "00";
     $("#gcalLink").href = "https://calendar.google.com/calendar/render?action=TEMPLATE"
       + `&text=${encodeURIComponent(`${s.name} · ${C.shop.fullName}`)}`

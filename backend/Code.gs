@@ -122,8 +122,10 @@ function doPost(e) {
       catch (err) { console.error(err); return json({ ok: false, error: "server", message: "Δεν ήταν δυνατή η κράτηση. Κάλεσε στο " + CONFIG.SHOP_PHONE + "." }); }
     }
     try {
-      sheet().appendRow([booking.id, booking.created, booking.date, booking.time, booking.end, booking.serviceName,
+      const sh = sheet();
+      sh.appendRow([booking.id, booking.created, booking.date, booking.time, booking.end, booking.serviceName,
         booking.name, "'" + booking.phone, booking.email, booking.notes, "Ενεργό", booking.token]);
+      booking.row = sh.getLastRow();
       SpreadsheetApp.flush();
     } catch (err) {
       console.error(err);
@@ -137,9 +139,12 @@ function doPost(e) {
     lock.releaseLock();
   }
 
-  try { emailCustomer(booking); } catch (err) { console.error(err); }
-  try { emailOwner(booking); } catch (err) { console.error(err); }
-  return json({ ok: true, id: booking.id });
+  // Emails go out after the lock. A failure never cancels the booking, but it is
+  // written in the sheet (column «Email») so it can never go unnoticed again.
+  const mailCustomer = emailCustomer(booking);
+  const mailOwner = emailOwner(booking);
+  logMail(booking, mailCustomer, mailOwner);
+  return json({ ok: true, id: booking.id, mail: mailCustomer === "OK", mailOwner: mailOwner === "OK" });
 }
 
 /* ======================= LOGIC ======================= */
@@ -249,7 +254,7 @@ function cancelPage(id, token, confirmed) {
         bumpGen();
         try { if (CONFIG.USE_CALENDAR) removeFromCalendar(id, b.date); } catch (err) { console.error(err); }
         try {
-          MailApp.sendEmail({ to: ownerEmail(), subject: `❌ Ακύρωση: ${b.name} · ${prettyDate(b.date)} ${b.time}`,
+          sendMail({ to: ownerEmail(), subject: `❌ Ακύρωση: ${b.name} · ${prettyDate(b.date)} ${b.time}`,
             htmlBody: mailShell(`<h2 style="margin:0 0 12px">Ακύρωση ραντεβού</h2><p>Ο/Η <b>${esc(b.name)}</b> ακύρωσε το ραντεβού:</p>${table(b)}<p style="font-size:12px;color:#888">Η ώρα ελευθερώθηκε στο site${CONFIG.USE_CALENDAR ? " και σβήστηκε από το Google Calendar σου" : ""}.</p>`), name: CONFIG.SHOP_NAME });
         } catch (err) { console.error(err); }
       }
@@ -271,10 +276,13 @@ function emailCustomer(b) {
     ${table(b)}
     <p style="margin:22px 0 6px">📍 <b>${CONFIG.SHOP_ADDRESS}</b><br>📞 ${CONFIG.SHOP_PHONE}</p>
     <p style="margin:22px 0 0;font-size:13px;color:#777">Δεν μπορείς να έρθεις; <a href="${cancelUrl}" style="color:#a8823a">Ακύρωσε το ραντεβού</a> ή κάλεσέ μας.</p>`);
-  MailApp.sendEmail({
-    to: b.email, replyTo: ownerEmail(), name: CONFIG.SHOP_NAME,
+  const owner = ownerEmail();
+  let attachments = [];
+  try { attachments = [ics(b)]; } catch (err) { console.error(err); }
+  return sendMail({
+    to: b.email, replyTo: isEmail(owner) ? owner : undefined, name: CONFIG.SHOP_NAME,
     subject: `Επιβεβαίωση ραντεβού · ${prettyDate(b.date)} στις ${b.time}`,
-    htmlBody: html, attachments: [ics(b)]
+    htmlBody: html, attachments
   });
 }
 
@@ -288,12 +296,48 @@ function emailOwner(b) {
     <b>Email:</b> <a href="mailto:${esc(b.email)}">${esc(b.email)}</a></p>
     ${b.notes ? `<p style="background:#f6f1e6;padding:12px 14px;border-radius:6px"><b>Σημείωση:</b> ${esc(b.notes)}</p>` : ""}
     <p style="font-size:12px;color:#888">Κωδικός κράτησης: ${b.id}${CONFIG.USE_CALENDAR ? "<br>Το ραντεβού μπήκε στο Google Calendar σου. Για ακύρωση, σβήσε το γεγονός και η ώρα ελευθερώνεται στο site." : ""}</p>`);
-  MailApp.sendEmail({
-    to: ownerEmail(), replyTo: b.email, name: "Κρατήσεις Website",
+  const owner = ownerEmail();
+  if (!isEmail(owner)) return "ΣΦΑΛΜΑ: δεν βρέθηκε το email του ιδιοκτήτη. Συμπλήρωσε το OWNER_EMAIL στο Code.gs.";
+  return sendMail({
+    to: owner, replyTo: b.email, name: "Κρατήσεις Website",
     subject: `💈 Νέο ραντεβού: ${b.name} · ${prettyDate(b.date)} ${b.time}`,
     htmlBody: html
   });
 }
+
+/** Sends an email and returns "OK" or "ΣΦΑΛΜΑ: …". Never throws.
+ *  If the full email fails, it retries once with the simplest possible message. */
+function sendMail(opts) {
+  try {
+    if (MailApp.getRemainingDailyQuota() < 1) return "ΣΦΑΛΜΑ: εξαντλήθηκε το ημερήσιο όριο email της Google (ξαναμηδενίζεται σε 24 ώρες).";
+  } catch (err) { console.error(err); }
+  const clean = {};
+  Object.keys(opts).forEach(k => { if (opts[k] !== undefined && !(Array.isArray(opts[k]) && !opts[k].length)) clean[k] = opts[k]; });
+  try { MailApp.sendEmail(clean); return "OK"; }
+  catch (err) {
+    console.error("email 1η προσπάθεια", err);
+    try {
+      MailApp.sendEmail(opts.to, opts.subject, opts.htmlBody.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(), { htmlBody: opts.htmlBody, name: opts.name });
+      return "OK";
+    } catch (err2) {
+      console.error("email 2η προσπάθεια", err2);
+      return "ΣΦΑΛΜΑ: " + String((err2 && err2.message) || err2).slice(0, 200);
+    }
+  }
+}
+
+/** Writes the email result next to the booking in the sheet (column M «Email»). */
+function logMail(b, customer, owner) {
+  try {
+    const sh = sheet();
+    if (!sh.getRange(1, 13).getValue()) sh.getRange(1, 13).setValue("Email").setFontWeight("bold").setBackground("#0b0b0c").setFontColor("#c9a45c");
+    const ok = customer === "OK" && owner === "OK";
+    const text = ok ? "✓ Στάλθηκαν" : `Πελάτης: ${customer} | Ιδιοκτήτης: ${owner}`;
+    if (b.row) sh.getRange(b.row, 13).setValue(text).setFontColor(ok ? "#1b7f3b" : "#c62828");
+    if (!ok) console.error("Αποτυχία email για κράτηση " + b.id + ": " + text);
+  } catch (err) { console.error(err); }
+}
+function isEmail(s) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(s || "")); }
 
 function table(b) {
   const row = (k, v) => `<tr><td style="padding:8px 0;color:#777;width:110px">${k}</td><td style="padding:8px 0;font-weight:600">${v}</td></tr>`;
@@ -406,11 +450,28 @@ function setup() {
     Logger.log("Νέα ραντεβού γράφονται στο ημερολόγιο: " + cal().getName());
     Logger.log("Ώρες μπλοκάρονται από τα ημερολόγια: " + blockingCalendars().map(c => c.getName()).join(", "));
   }
-  MailApp.getRemainingDailyQuota();
+  testEmail();
   Logger.log("OK — sheet ready. Οι κρατήσεις θα πηγαίνουν στο: " + ownerEmail() + ". Τώρα: Deploy → New deployment → Web app.");
 }
 
 /** Owner email: CONFIG.OWNER_EMAIL, or the Google account that deployed the web app. */
 function ownerEmail() {
-  return CONFIG.OWNER_EMAIL || Session.getEffectiveUser().getEmail();
+  const set = String(CONFIG.OWNER_EMAIL || "").trim();
+  if (isEmail(set)) return set;
+  let me = "";
+  try { me = Session.getEffectiveUser().getEmail(); } catch (err) { console.error(err); }
+  if (!me) try { me = Session.getActiveUser().getEmail(); } catch (err) { console.error(err); }
+  return me;
+}
+
+/** ▶ Run this from the editor if emails stop arriving.
+ *  It shows the exact problem in the «Execution log» and, if Google needs permissions
+ *  again, it opens the authorization window. */
+function testEmail() {
+  const to = ownerEmail();
+  Logger.log("Email ιδιοκτήτη: " + (to || "(ΚΕΝΟ: συμπλήρωσε το OWNER_EMAIL)"));
+  Logger.log("Υπόλοιπο ημερήσιου ορίου email: " + MailApp.getRemainingDailyQuota());
+  MailApp.sendEmail({ to, name: CONFIG.SHOP_NAME, subject: "✅ Δοκιμή email · κρατήσεις " + CONFIG.SHOP_NAME,
+    htmlBody: mailShell(`<h2 style="margin:0 0 10px">Τα email δουλεύουν ✅</h2><p>Αυτό είναι δοκιμαστικό μήνυμα από το σύστημα κρατήσεων.</p>`) });
+  Logger.log("ΟΚ: στάλθηκε δοκιμαστικό email στο " + to + ". Τώρα: Deploy → Manage deployments → Edit → New version → Deploy.");
 }
