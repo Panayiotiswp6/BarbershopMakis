@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="el">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Makhs Barber Shop · Κουρείο στου Ζωγράφου</title>
+  <meta name="description" content="Makhs Barber Shop — ανδρικό κουρείο στου Ζωγράφου, Παπάγου 92. Fade, κούρεμα, γένια, ξύρισμα. 5,0★ από 140 κριτικές. Κλείσε ραντεβού online.">
+  <meta name="theme-color" content="#0b0b0c">
+  <meta property="og:title" content="Makhs Barber Shop · Ζωγράφου">
+  <meta property="og:description" content="Η τέχνη του κουρέματος. Κλείσε ραντεβού online σε 30 δευτερόλεπτα.">
+  <meta property="og:image" content="assets/img/shop/storefront.jpg">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230b0b0c'/><text x='32' y='45' font-family='Arial Black,Arial' font-weight='900' font-size='38' text-anchor='middle' fill='%23c9a45c'>M</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Sans+Extra+Condensed:wght@600;700;800;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"BarberShop","name":"Makhs Barber Shop","telephone":"+302107759949",
+   "address":{"@type":"PostalAddress","streetAddress":"Παπάγου 92","addressLocality":"Ζωγράφου","postalCode":"15772","addressCountry":"GR"},
+   "geo":{"@type":"GeoCoordinates","latitude":37.9772967,"longitude":23.771599},
+   "aggregateRating":{"@type":"AggregateRating","ratingValue":"5.0","reviewCount":"140"},
+   "openingHoursSpecification":[
+    {"@type":"OpeningHoursSpecification","dayOfWeek":["Monday","Wednesday","Saturday"],"opens":"09:00","closes":"15:00"},
+    {"@type":"OpeningHoursSpecification","dayOfWeek":["Tuesday","Thursday","Friday"],"opens":"09:00","closes":"14:00"},
+    {"@type":"OpeningHoursSpecification","dayOfWeek":["Tuesday","Thursday","Friday"],"opens":"17:00","closes":"21:00"}]}
+  </script>
+</head>
+<body class="is-loading">
+
+<!-- ================= SPLASH ================= -->
+<div class="splash" id="splash" aria-hidden="true">
+  <div class="splash__half splash__half--top"></div>
+  <div class="splash__half splash__half--bottom"></div>
+  <div class="splash__content">
+    <div class="splash__pole"><span></span></div>
+    <h1 class="splash__word" aria-label="Makhs">
+      <span>M</span><span>A</span><span>K</span><span>H</span><span>S</span>
+    </h1>
+    <p class="splash__sub">Barber Shop <i></i> Ζωγράφου</p>
+  </div>
+  <div class="splash__blade"></div>
+  <button class="splash__skip" type="button">Παράλειψη</button>
+</div>
+
+<!-- ================= NAV ================= -->
+<header class="nav" id="nav">
+  <a href="#top" class="nav__logo">MAKHS<span>barber shop</span></a>
+  <nav class="nav__links" id="navLinks">
+    <a href="#services">Υπηρεσίες</a>
+    <a href="#work">Δουλειά</a>
+    <a href="#shop">Το μαγαζί</a>
+    <a href="#reviews">Κριτικές</a>
+    <a href="#contact">Επικοινωνία</a>
+    <a href="#booking" class="btn btn--gold btn--sm nav__cta">Κλείσε ραντεβού</a>
+  </nav>
+  <button class="nav__burger" id="burger" aria-label="Μενού" aria-expanded="false"><span></span><span></span></button>
+</header>
+
+<main id="top">
+
+<!-- ================= HERO ================= -->
+<section class="hero">
+  <div class="hero__media" data-parallax="0.25">
+    <img src="assets/img/work/hero.jpg" alt="Κουρέας κόβει μαλλιά με ψαλίδι και χτένα">
+  </div>
+  <div class="hero__shade"></div>
+  <div class="hero__grain"></div>
+
+  <div class="hero__inner">
+    <div class="hero__left">
+      <a class="badge" href="#reviews">
+        <span class="badge__stars">★★★★★</span>
+        <b>5,0</b> · 140 κριτικές Google
+      </a>
+      <h2 class="hero__title">
+        <span class="line"><span>Η τέχνη</span></span>
+        <span class="line"><span>του</span></span>
+        <span class="line"><span class="gold">κουρέματος</span></span>
+      </h2>
+      <p class="hero__lead">Ακρίβεια, καθαρές γραμμές και ένα κούρεμα που σου ταιριάζει. Ο Μάκης σε περιμένει στην Παπάγου 92, στου Ζωγράφου.</p>
+      <div class="hero__ctas">
+        <a href="#booking" class="btn btn--gold magnetic">Κλείσε ραντεβού <span class="arrow">→</span></a>
+        <a href="tel:+302107759949" class="btn btn--ghost">Κάλεσε 210 775 9949</a>
+      </div>
+    </div>
+
+    <aside class="hero__menu" aria-label="Τιμοκατάλογος">
+      <p class="eyebrow">Τιμοκατάλογος</p>
+      <ul id="heroPrices"></ul>
+      <a href="#services" class="hero__menu-link">Όλες οι υπηρεσίες →</a>
+    </aside>
+  </div>
+
+  <a href="#services" class="hero__scroll" aria-label="Κύλιση"><span></span></a>
+</section>
+
+<!-- ================= MARQUEE ================= -->
+<div class="marquee" aria-hidden="true">
+  <div class="marquee__track">
+    <span>Skin fade</span><i>✦</i><span>Κούρεμα</span><i>✦</i><span>Γένια</span><i>✦</i><span>Ξύρισμα</span><i>✦</i><span>Σχέδια</span><i>✦</i><span>Ζεστή πετσέτα</span><i>✦</i>
+    <span>Skin fade</span><i>✦</i><span>Κούρεμα</span><i>✦</i><span>Γένια</span><i>✦</i><span>Ξύρισμα</span><i>✦</i><span>Σχέδια</span><i>✦</i><span>Ζεστή πετσέτα</span><i>✦</i>
+  </div>
+</div>
+
+<!-- ================= SERVICES ================= -->
+<section class="section section--light" id="services">
+  <div class="container">
+    <div class="section__head reveal">
+      <p class="eyebrow">01 — Υπηρεσίες</p>
+      <h2 class="h2">Τι κάνουμε</h2>
+      <p class="muted">Κάθε υπηρεσία γίνεται με προσοχή στη λεπτομέρεια και επαγγελματικά εργαλεία.</p>
+    </div>
+    <div class="services" id="servicesGrid"></div>
+    <p class="note reveal">* Οι τιμές είναι ενδεικτικές.</p>
+  </div>
+</section>
+
+<!-- ================= WORK / GALLERY ================= -->
+<section class="section section--dark" id="work">
+  <div class="container">
+    <div class="section__head section__head--row reveal">
+      <div>
+        <p class="eyebrow">02 — Η δουλειά μας</p>
+        <h2 class="h2">Λεπτομέρεια σε κάθε γραμμή</h2>
+      </div>
+      <p class="muted">Fades, γενειάδες, ξυράφι. Δες το στυλ που σου ταιριάζει και φέρ' το μας.</p>
+    </div>
+    <div class="gallery" id="gallery">
+      <figure class="g g--tall reveal"><img loading="lazy" src="assets/img/work/skin-fade.jpg" alt="Skin fade με μηχανή"><figcaption>Skin fade</figcaption></figure>
+      <figure class="g reveal"><img loading="lazy" src="assets/img/work/razor.jpg" alt="Γραμμές με ξυράφι"><figcaption>Ξυράφι</figcaption></figure>
+      <figure class="g reveal"><img loading="lazy" src="assets/img/work/result-quiff.jpg" alt="Κούρεμα quiff με fade"><figcaption>Quiff &amp; fade</figcaption></figure>
+      <figure class="g g--wide reveal"><img loading="lazy" src="assets/img/work/scissor-cut.jpg" alt="Κούρεμα με ψαλίδι"><figcaption>Ψαλίδι</figcaption></figure>
+      <figure class="g g--tall reveal"><img loading="lazy" src="assets/img/work/result-beard.jpg" alt="Περιποιημένη γενειάδα"><figcaption>Γενειάδα</figcaption></figure>
+      <figure class="g reveal"><img loading="lazy" src="assets/img/work/design-fade.jpg" alt="Fade με σχέδιο"><figcaption>Σχέδια</figcaption></figure>
+      <figure class="g reveal"><img loading="lazy" src="assets/img/work/crop-fade.jpg" alt="Crop fade"><figcaption>Crop</figcaption></figure>
+      <figure class="g g--tall reveal"><img loading="lazy" src="assets/img/work/beard-trim.jpg" alt="Σχήμα γενειάδας με ψαλίδι"><figcaption>Σχήμα γενειάδας</figcaption></figure>
+      <figure class="g reveal"><img loading="lazy" src="assets/img/work/detail-lineup.jpg" alt="Λεπτομέρεια στο περίγραμμα"><figcaption>Line-up</figcaption></figure>
+      <figure class="g g--wide reveal"><img loading="lazy" src="assets/img/work/clipper.jpg" alt="Κούρεμα με μηχανή"><figcaption>Μηχανή</figcaption></figure>
+      <figure class="g reveal"><img loading="lazy" src="assets/img/work/profile-bw.jpg" alt="Τελικό αποτέλεσμα κουρέματος"><figcaption>Classic</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<!-- ================= THE SHOP ================= -->
+<section class="section section--black" id="shop">
+  <div class="container shop">
+    <div class="shop__media reveal">
+      <div class="shop__main" data-tilt>
+        <img loading="lazy" src="assets/img/shop/storefront.jpg" alt="Η πρόσοψη του Makhs Barber Shop τη νύχτα">
+      </div>
+      <div class="shop__float shop__float--a reveal"><img loading="lazy" src="assets/img/shop/interior.jpg" alt="Το εσωτερικό του κουρείου"></div>
+      <div class="shop__float shop__float--b reveal"><img loading="lazy" src="assets/img/shop/belmont.jpg" alt="Καρέκλα Takara Belmont"></div>
+    </div>
+    <div class="shop__text">
+      <p class="eyebrow reveal">03 — Το μαγαζί</p>
+      <h2 class="h2 reveal">Ο χώρος σου<br>στου Ζωγράφου</h2>
+      <p class="reveal">Στο Makhs δεν βιάζεσαι. Κάθεσαι σε ιαπωνικές καρέκλες <b>Takara Belmont</b>, ακούς καλή μουσική και αφήνεις τον Μάκη να κάνει αυτό που ξέρει καλύτερα.</p>
+      <p class="reveal muted">Δερμάτινοι καναπέδες, βινύλια στα ράφια, neon το βράδυ και δωρεάν Wi-Fi. Ένα κουρείο της γειτονιάς, με προσοχή σε κάθε λεπτομέρεια.</p>
+      <div class="stats">
+        <div class="stat reveal"><b data-count="5" data-decimals="1">0</b><span>Βαθμολογία Google</span></div>
+        <div class="stat reveal"><b data-count="140" data-suffix="+">0</b><span>Κριτικές 5★</span></div>
+        <div class="stat reveal"><b data-count="6">0</b><span>Μέρες την εβδομάδα</span></div>
+      </div>
+      <a href="#booking" class="btn btn--gold reveal">Κλείσε θέση στην καρέκλα →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ================= BOOKING ================= -->
+<section class="section section--dark booking-section" id="booking">
+  <div class="container">
+    <div class="section__head section__head--center reveal">
+      <p class="eyebrow">04 — Online ραντεβού</p>
+      <h2 class="h2">Κλείσε ραντεβού</h2>
+      <p class="muted">Διάλεξε υπηρεσία, μέρα και ώρα. Θα λάβεις αμέσως επιβεβαίωση στο email σου.</p>
+    </div>
+
+    <div class="booking reveal" id="bookingApp">
+      <ol class="steps" aria-label="Βήματα κράτησης">
+        <li class="is-active" data-step="1"><span>1</span>Υπηρεσία</li>
+        <li data-step="2"><span>2</span>Ημέρα &amp; ώρα</li>
+        <li data-step="3"><span>3</span>Στοιχεία</li>
+      </ol>
+
+      <div class="booking__panes">
+        <!-- STEP 1 -->
+        <div class="pane is-active" data-pane="1">
+          <div class="svc-pick" id="svcPick"></div>
+        </div>
+
+        <!-- STEP 2 -->
+        <div class="pane" data-pane="2">
+          <div class="dt">
+            <div class="cal">
+              <div class="cal__head">
+                <button type="button" class="cal__nav" id="calPrev" aria-label="Προηγούμενος μήνας">‹</button>
+                <h3 id="calTitle"></h3>
+                <button type="button" class="cal__nav" id="calNext" aria-label="Επόμενος μήνας">›</button>
+              </div>
+              <div class="cal__dow"><span>Δε</span><span>Τρ</span><span>Τε</span><span>Πε</span><span>Πα</span><span>Σα</span><span>Κυ</span></div>
+              <div class="cal__grid" id="calGrid"></div>
+            </div>
+            <div class="slots">
+              <h4 id="slotsTitle">Διάλεξε ημέρα</h4>
+              <div class="slots__grid" id="slotsGrid"><p class="muted small">Οι διαθέσιμες ώρες θα εμφανιστούν εδώ.</p></div>
+            </div>
+          </div>
+          <div class="pane__foot">
+            <button type="button" class="btn btn--ghost btn--sm" data-back>← Πίσω</button>
+          </div>
+        </div>
+
+        <!-- STEP 3 -->
+        <div class="pane" data-pane="3">
+          <div class="summary" id="summary"></div>
+          <form class="form" id="bookingForm" novalidate>
+            <div class="field">
+              <input id="fName" name="name" required autocomplete="name" placeholder=" ">
+              <label for="fName">Ονοματεπώνυμο</label>
+            </div>
+            <div class="field">
+              <input id="fPhone" name="phone" type="tel" required autocomplete="tel" inputmode="tel" placeholder=" ">
+              <label for="fPhone">Κινητό τηλέφωνο</label>
+            </div>
+            <div class="field field--full">
+              <input id="fEmail" name="email" type="email" required autocomplete="email" placeholder=" ">
+              <label for="fEmail">Email (για την επιβεβαίωση)</label>
+            </div>
+            <div class="field field--full">
+              <textarea id="fNotes" name="notes" rows="2" placeholder=" "></textarea>
+              <label for="fNotes">Σημείωση (προαιρετικό)</label>
+            </div>
+            <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+            <p class="form__error" id="formError" role="alert"></p>
+            <div class="pane__foot">
+              <button type="button" class="btn btn--ghost btn--sm" data-back>← Πίσω</button>
+              <button type="submit" class="btn btn--gold" id="submitBtn">Επιβεβαίωση ραντεβού</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- DONE -->
+        <div class="pane" data-pane="4">
+          <div class="done">
+            <svg class="done__check" viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/><path d="M15 27l7 7 15-16"/></svg>
+            <h3>Το ραντεβού σου κλείστηκε!</h3>
+            <p id="doneText"></p>
+            <div class="done__actions">
+              <a class="btn btn--ghost btn--sm" id="gcalLink" target="_blank" rel="noopener">+ Google Calendar</a>
+              <button type="button" class="btn btn--gold btn--sm" id="newBooking">Νέο ραντεβού</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="booking__demo" id="demoNote" hidden>Λειτουργία επίδειξης: οι κρατήσεις δεν στέλνονται ακόμα στο κουρείο.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= REVIEWS ================= -->
+<section class="section section--light" id="reviews">
+  <div class="container">
+    <div class="section__head section__head--row reveal">
+      <div>
+        <p class="eyebrow">05 — Κριτικές</p>
+        <h2 class="h2">Τι λένε οι πελάτες</h2>
+      </div>
+      <a class="rating" href="https://maps.app.goo.gl/zYNihV4hXrfXu4hx6" target="_blank" rel="noopener">
+        <b>5,0</b><span class="rating__stars">★★★★★</span><span>140 κριτικές στο Google</span>
+      </a>
+    </div>
+    <div class="reviews">
+      <blockquote class="review reveal">
+        <span class="review__stars">★★★★★</span>
+        <p>«Πάντα κάνει το κούρεμά μου ακριβώς όπως θέλω, με ακρίβεια και επαγγελματισμό. Ο καλύτερος κουρέας στην Αθήνα που έχω δει. Απλά 10/10!»</p>
+        <cite>Chris <span>· Google</span></cite>
+      </blockquote>
+      <blockquote class="review reveal">
+        <span class="review__stars">★★★★★</span>
+        <p>«Πήγα τον ανιψιό μου και ειλικρινά ήταν το καλύτερο κούρεμα που θα μπορούσε να του έχει κάνει. Εξαιρετικός στη δουλειά του!»</p>
+        <cite>Anastasia K. <span>· Google</span></cite>
+      </blockquote>
+      <blockquote class="review reveal">
+        <span class="review__stars">★★★★★</span>
+        <p>«Φοβερός ο Μάκης. Μοναδικός!»</p>
+        <cite>Ευγενία Μ. <span>· Google</span></cite>
+      </blockquote>
+    </div>
+  </div>
+</section>
+
+<!-- ================= CONTACT ================= -->
+<section class="section section--black" id="contact">
+  <div class="container contact">
+    <div class="contact__info">
+      <p class="eyebrow reveal">06 — Επικοινωνία</p>
+      <h2 class="h2 reveal">Βρες μας</h2>
+      <ul class="contact__list">
+        <li class="reveal"><span class="ico">⌖</span><div><b>Παπάγου 92</b><small>Ζωγράφου 157 72</small></div></li>
+        <li class="reveal"><span class="ico">✆</span><div><a href="tel:+302107759949"><b>210 775 9949</b></a><small>Κάλεσε για ραντεβού ή πληροφορίες</small></div></li>
+        <li class="reveal"><span class="ico">◷</span><div><b id="openNow">Ωράριο</b><small>Κυριακή κλειστά</small></div></li>
+      </ul>
+      <table class="hours reveal" id="hoursTable"></table>
+      <div class="contact__btns reveal">
+        <a class="btn btn--gold btn--sm" href="https://maps.app.goo.gl/zYNihV4hXrfXu4hx6" target="_blank" rel="noopener">Οδηγίες →</a>
+        <a class="btn btn--ghost btn--sm" id="fbLink" href="https://www.facebook.com/" target="_blank" rel="noopener">Facebook</a>
+      </div>
+    </div>
+    <div class="contact__map reveal">
+      <iframe title="Χάρτης — Makhs Barber Shop" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+        src="https://maps.google.com/maps?q=Makhs%20barber%2C%20%CE%A0%CE%B1%CF%80%CE%AC%CE%B3%CE%BF%CF%85%2092%2C%20%CE%96%CF%89%CE%B3%CF%81%CE%AC%CF%86%CE%BF%CF%85&z=17&output=embed"></iframe>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="container footer__inner">
+    <a href="#top" class="nav__logo">MAKHS<span>barber shop</span></a>
+    <p>© <span id="year"></span> Makhs Barber Shop · Παπάγου 92, Ζωγράφου</p>
+    <a href="#booking" class="footer__cta">Κλείσε ραντεβού →</a>
+  </div>
+</footer>
+
+<!-- Mobile sticky bar -->
+<div class="mbar">
+  <a href="tel:+302107759949" class="mbar__call" aria-label="Κλήση">✆</a>
+  <a href="#booking" class="btn btn--gold">Κλείσε ραντεβού</a>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" hidden>
+  <button class="lightbox__close" aria-label="Κλείσιμο">×</button>
+  <button class="lightbox__nav lightbox__prev" aria-label="Προηγούμενη">‹</button>
+  <img alt="">
+  <button class="lightbox__nav lightbox__next" aria-label="Επόμενη">›</button>
+</div>
+
+<div class="cursor" id="cursor"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/main.js"></script>
+<script src="assets/js/booking.js"></script>
+</body>
+</html>
