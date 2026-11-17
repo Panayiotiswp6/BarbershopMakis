@@ -167,12 +167,6 @@
       });
       el.addEventListener("mouseleave", () => el.style.transform = "");
     });
-    /* cursor */
-    const cur = $("#cursor"); let cx = 0, cy = 0, tx = 0, ty = 0;
-    addEventListener("mousemove", e => { tx = e.clientX; ty = e.clientY; cur.style.opacity = 1; });
-    document.addEventListener("mouseleave", () => cur.style.opacity = 0);
-    (function loop() { cx += (tx - cx) * .18; cy += (ty - cy) * .18; cur.style.transform = `translate(${cx}px, ${cy}px)`; requestAnimationFrame(loop); })();
-    document.addEventListener("mouseover", e => cur.classList.toggle("is-hover", !!e.target.closest("a, button, .g, .day:not(:disabled), .slot")));
   }
 
   /* ---------- LIGHTBOX ---------- */
