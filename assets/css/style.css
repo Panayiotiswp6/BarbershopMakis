@@ -477,6 +477,8 @@ body.is-ready .hero__lead, body.is-ready .hero__ctas, body.is-ready .badge, body
 .footer__inner { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
 .footer p { margin: 0; font-size: .82rem; color: var(--text-dim); }
 .footer__cta { font: 700 .9rem/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--gold); }
+.footer__credit { margin: 28px 0 0 !important; padding-top: 22px; border-top: 1px solid var(--line); text-align: center; font-size: .72rem !important; letter-spacing: .24em; text-transform: uppercase; color: rgba(255,255,255,.38) !important; }
+.footer__credit b { color: var(--gold); font-weight: 600; letter-spacing: .2em; }
 
 /* ---------- Mobile bar ---------- */
 .mbar { display: none; }
