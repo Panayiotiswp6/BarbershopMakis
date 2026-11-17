@@ -478,7 +478,10 @@ body.is-ready .hero__lead, body.is-ready .hero__ctas, body.is-ready .badge, body
 .footer p { margin: 0; font-size: .82rem; color: var(--text-dim); }
 .footer__cta { font: 700 .9rem/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--gold); }
 .footer__credit { margin: 28px 0 0 !important; padding-top: 22px; border-top: 1px solid var(--line); text-align: center; font-size: .72rem !important; letter-spacing: .24em; text-transform: uppercase; color: rgba(255,255,255,.38) !important; }
-.footer__credit b { color: var(--gold); font-weight: 600; letter-spacing: .2em; }
+.footer__credit { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.footer__credit a { display: inline-flex; padding: 6px 4px; opacity: .7; transition: opacity .3s, transform .3s var(--ease); }
+.footer__credit a:hover, .footer__credit a:focus-visible { opacity: 1; transform: translateY(-1px); }
+.footer__credit img { height: 18px; width: auto; }
 
 /* ---------- Mobile bar ---------- */
 .mbar { display: none; }
