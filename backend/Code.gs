@@ -62,6 +62,11 @@ function doGet(e) {
   const p = (e && e.parameter) || {};
   try {
     if (p.action === "availability") return json({ ok: true, date: p.date, busy: busyFor(p.date) });
+    // One call for many days (the site prefetches the whole booking window → instant day switching)
+    if (p.action === "range") {
+      const days = Math.min(Math.max(parseInt(p.days, 10) || 1, 1), CONFIG.DAYS_AHEAD + 2);
+      return json({ ok: true, from: p.from, days: busyRange(p.from, days) });
+    }
     if (p.action === "cancel") return cancelPage(p.id, p.token);
     return json({ ok: true, service: CONFIG.SHOP_NAME });
   } catch (err) {
@@ -135,12 +140,47 @@ function validate(d) {
 }
 
 function busyFor(dateStr) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr || "")) throw new Error("bad date");
-  if (CONFIG.USE_CALENDAR) return calendarBusy(dateStr);
-  const rows = sheet().getDataRange().getValues().slice(1);
-  return rows
-    .filter(r => cellDate(r[2]) === dateStr && r[10] !== "Ακυρώθηκε")
-    .map(r => ({ start: cellTime(r[3]), end: cellTime(r[4]) }));
+  return busyRange(dateStr, 1)[dateStr];
+}
+
+/** Busy intervals for `days` consecutive days starting at fromStr → { "yyyy-MM-dd": [{start,end}], … }
+ *  Reads the calendar (or the sheet) only ONCE for the whole range. */
+function busyRange(fromStr, days) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fromStr || "")) throw new Error("bad date");
+  const keys = [], starts = [];
+  const f = fromStr.split("-").map(Number);
+  for (let i = 0; i < days; i++) {
+    const d = new Date(f[0], f[1] - 1, f[2] + i);           // script timezone, DST-safe
+    starts.push(d); keys.push(cellDate(d));
+  }
+  const out = {};
+  keys.forEach(k => out[k] = []);
+
+  if (CONFIG.USE_CALENDAR) {
+    const rangeEnd = new Date(f[0], f[1] - 1, f[2] + days);
+    blockingCalendars()
+      .reduce((all, c) => all.concat(c.getEvents(starts[0], rangeEnd)), [])
+      .filter(ev => ev.getMyStatus() !== CalendarApp.GuestStatus.NO) // ignore invitations he declined
+      .forEach(ev => {
+        const s = ev.getStartTime(), e = ev.getEndTime(), allDay = ev.isAllDayEvent();
+        starts.forEach((dayStart, i) => {
+          const dayEnd = i + 1 < starts.length ? starts[i + 1] : rangeEnd;
+          if (!(s < dayEnd && e > dayStart)) return;                     // event doesn't touch this day
+          if (allDay) { out[keys[i]].push({ start: "00:00", end: "23:59" }); return; }
+          out[keys[i]].push({
+            start: s <= dayStart ? "00:00" : cellTime(s),
+            end: e >= dayEnd ? "23:59" : cellTime(e)
+          });
+        });
+      });
+    return out;
+  }
+
+  sheet().getDataRange().getValues().slice(1).forEach(r => {
+    const k = cellDate(r[2]);
+    if (out[k] && r[10] !== "Ακυρώθηκε") out[k].push({ start: cellTime(r[3]), end: cellTime(r[4]) });
+  });
+  return out;
 }
 
 function cancelPage(id, token) {
@@ -232,19 +272,14 @@ function cal() {
   return c;
 }
 
-/** Busy intervals for one day from the owner's calendar.
- *  Any event blocks its time; an all-day event (e.g. «Κλειστά», «Άδεια») blocks the whole day. */
-function calendarBusy(dateStr) {
-  const dayStart = dateAt(dateStr, "00:00");
-  const dayEnd = new Date(dayStart.getTime() + 86400000);
-  return cal().getEvents(dayStart, dayEnd)
-    .filter(ev => ev.getMyStatus() !== CalendarApp.GuestStatus.NO) // ignore invitations he declined
-    .map(ev => {
-      if (ev.isAllDayEvent()) return { start: "00:00", end: "23:59" };
-      const s = ev.getStartTime() < dayStart ? dayStart : ev.getStartTime();
-      const e = ev.getEndTime() >= dayEnd ? null : ev.getEndTime();
-      return { start: cellTime(s), end: e ? cellTime(e) : "23:59" };
-    });
+/** Calendars whose events block times on the site.
+ *  CALENDAR_ID set → only that one. Otherwise → EVERY calendar the owner owns
+ *  (main + any extra ones like «Κουρείο», «Προσωπικά»). Subscribed calendars
+ *  such as holidays/birthdays are not owned, so they don't block anything. */
+function blockingCalendars() {
+  if (CONFIG.CALENDAR_ID) return [cal()];
+  const owned = CalendarApp.getAllOwnedCalendars();
+  return owned.length ? owned : [CalendarApp.getDefaultCalendar()];
 }
 
 function addToCalendar(b) {
@@ -287,7 +322,10 @@ function simplePage(title, text) {
 /** Run once from the editor to grant permissions and create the sheet. */
 function setup() {
   sheet();
-  if (CONFIG.USE_CALENDAR) Logger.log("Calendar: " + cal().getName());
+  if (CONFIG.USE_CALENDAR) {
+    Logger.log("Νέα ραντεβού γράφονται στο ημερολόγιο: " + cal().getName());
+    Logger.log("Ώρες μπλοκάρονται από τα ημερολόγια: " + blockingCalendars().map(c => c.getName()).join(", "));
+  }
   MailApp.getRemainingDailyQuota();
   Logger.log("OK — sheet ready. Οι κρατήσεις θα πηγαίνουν στο: " + ownerEmail() + ". Τώρα: Deploy → New deployment → Web app.");
 }
