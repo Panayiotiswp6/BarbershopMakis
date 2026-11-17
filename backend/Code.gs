@@ -30,6 +30,9 @@ const CONFIG = {
   DAYS_AHEAD: 30,
   MIN_LEAD_MINUTES: 60,
   SHEET_NAME: "Κρατήσεις",
+  /* Για ταχύτητα, οι ελεύθερες ώρες κρατιούνται λίγα δευτερόλεπτα σε cache.
+     ΔΕΝ επηρεάζει την ασφάλεια: πριν από κάθε κράτηση ο server ξαναδιαβάζει το ημερολόγιο. */
+  RANGE_CACHE_SECONDS: 20,
 
   // id → [όνομα, λεπτά, τιμή]   (ίδια με assets/js/config.js)
   SERVICES: {
@@ -58,6 +61,8 @@ const DAYS = ["Κυριακή", "Δευτέρα", "Τρίτη", "Τετάρτη"
 const MONTHS_GEN = ["Ιανουαρίου", "Φεβρουαρίου", "Μαρτίου", "Απριλίου", "Μαΐου", "Ιουνίου", "Ιουλίου", "Αυγούστου", "Σεπτεμβρίου", "Οκτωβρίου", "Νοεμβρίου", "Δεκεμβρίου"];
 
 /* ======================= HTTP ======================= */
+const VERSION = 3;
+
 function doGet(e) {
   const p = (e && e.parameter) || {};
   try {
@@ -65,10 +70,16 @@ function doGet(e) {
     // One call for many days (the site prefetches the whole booking window → instant day switching)
     if (p.action === "range") {
       const days = Math.min(Math.max(parseInt(p.days, 10) || 1, 1), CONFIG.DAYS_AHEAD + 2);
-      return json({ ok: true, from: p.from, days: busyRange(p.from, days) });
+      const key = "range:" + gen() + ":" + p.from + ":" + days;
+      const cache = CacheService.getScriptCache();
+      const hit = cache.get(key);
+      if (hit) return text(hit);
+      const body = JSON.stringify({ ok: true, v: VERSION, from: p.from, days: busyRange(p.from, days) });
+      try { cache.put(key, body, CONFIG.RANGE_CACHE_SECONDS); } catch (err) { /* too big for cache: fine */ }
+      return text(body);
     }
-    if (p.action === "cancel") return cancelPage(p.id, p.token);
-    return json({ ok: true, service: CONFIG.SHOP_NAME });
+    if (p.action === "cancel") return cancelPage(p.id, p.token, p.confirm === "yes");
+    return json({ ok: true, v: VERSION, service: CONFIG.SHOP_NAME });
   } catch (err) {
     return json({ ok: false, error: "server", message: String(err) });
   }
@@ -83,10 +94,18 @@ function doPost(e) {
   const v = validate(data);
   if (v.error) return json({ ok: false, error: v.error, message: v.message });
 
+  const cache = CacheService.getScriptCache();
+  const rid = /^[\w-]{8,64}$/.test(String(data.rid || "")) ? "rid:" + data.rid : null;
+
   const lock = LockService.getScriptLock();
-  if (!lock.tryLock(15000)) return json({ ok: false, error: "busy", message: "Δοκίμασε ξανά σε λίγα δευτερόλεπτα." });
+  if (!lock.tryLock(20000)) return json({ ok: false, error: "busy", message: "Δοκίμασε ξανά σε λίγα δευτερόλεπτα." });
   let booking;
   try {
+    // Same request sent twice (e.g. the phone lost signal and the site retried) → answer as before, don't book twice.
+    const prev = rid && cache.get(rid);
+    if (prev) return json({ ok: true, id: prev, repeat: true });
+
+    // Fresh read of the calendar/sheet (never the cache) + the last few minutes of online bookings.
     const overlap = busyFor(v.date).some(b => toMin(v.time) < toMin(b.end) && toMin(v.end) > toMin(b.start));
     if (overlap) return json({ ok: false, error: "slot_taken" });
     booking = {
@@ -102,9 +121,18 @@ function doPost(e) {
       try { addToCalendar(booking); }
       catch (err) { console.error(err); return json({ ok: false, error: "server", message: "Δεν ήταν δυνατή η κράτηση. Κάλεσε στο " + CONFIG.SHOP_PHONE + "." }); }
     }
-    sheet().appendRow([booking.id, booking.created, booking.date, booking.time, booking.end, booking.serviceName,
-      booking.name, "'" + booking.phone, booking.email, booking.notes, "Ενεργό", booking.token]);
-    SpreadsheetApp.flush();
+    try {
+      sheet().appendRow([booking.id, booking.created, booking.date, booking.time, booking.end, booking.serviceName,
+        booking.name, "'" + booking.phone, booking.email, booking.notes, "Ενεργό", booking.token]);
+      SpreadsheetApp.flush();
+    } catch (err) {
+      console.error(err);
+      // Without the calendar the sheet IS the reservation → must not report success.
+      if (!CONFIG.USE_CALENDAR) return json({ ok: false, error: "server", message: "Δεν ήταν δυνατή η κράτηση. Κάλεσε στο " + CONFIG.SHOP_PHONE + "." });
+    }
+    rememberRecent(booking);
+    if (rid) cache.put(rid, booking.id, 21600);
+    bumpGen();
   } finally {
     lock.releaseLock();
   }
@@ -131,6 +159,7 @@ function validate(d) {
   const now = new Date();
   if (start.getTime() < now.getTime() + CONFIG.MIN_LEAD_MINUTES * 60000) return { error: "too_soon", message: "Η ώρα αυτή δεν είναι πλέον διαθέσιμη." };
   if (start.getTime() > now.getTime() + (CONFIG.DAYS_AHEAD + 1) * 86400000) return { error: "too_far", message: "Πολύ μακρινή ημερομηνία." };
+  if (cellDate(start) !== d.date) return { error: "bad_datetime", message: "Μη έγκυρη ημερομηνία/ώρα." }; // e.g. 2026-02-31
 
   const startM = toMin(d.time), endM = startM + service[1];
   const ranges = CONFIG.HOURS[start.getDay()] || [];
@@ -156,11 +185,14 @@ function busyRange(fromStr, days) {
   const out = {};
   keys.forEach(k => out[k] = []);
 
+  // Online bookings of the last minutes always count (safety net while the calendar syncs).
+  recentBookings().forEach(b => { if (out[b.date]) out[b.date].push({ start: b.start, end: b.end }); });
+
   if (CONFIG.USE_CALENDAR) {
     const rangeEnd = new Date(f[0], f[1] - 1, f[2] + days);
     blockingCalendars()
       .reduce((all, c) => all.concat(c.getEvents(starts[0], rangeEnd)), [])
-      .filter(ev => ev.getMyStatus() !== CalendarApp.GuestStatus.NO) // ignore invitations he declined
+      .filter(blocks)
       .forEach(ev => {
         const s = ev.getStartTime(), e = ev.getEndTime(), allDay = ev.isAllDayEvent();
         starts.forEach((dayStart, i) => {
@@ -183,24 +215,51 @@ function busyRange(fromStr, days) {
   return out;
 }
 
-function cancelPage(id, token) {
+/** Does this calendar event block time on the site? */
+function blocks(ev) {
+  try { if (ev.getMyStatus() === CalendarApp.GuestStatus.NO) return false; } catch (err) {} // invitations he declined
+  try {
+    // «Τοποθεσία εργασίας» and birthdays are not real appointments
+    const t = ev.getEventType();
+    if (t === CalendarApp.EventType.WORKING_LOCATION || t === CalendarApp.EventType.BIRTHDAY) return false;
+  } catch (err) {}
+  return true;
+}
+
+/** Cancel link from the customer's email.
+ *  First visit only SHOWS the booking with a button; the cancellation happens on the button press.
+ *  (Email security scanners open links automatically — they must never cancel an appointment.) */
+function cancelPage(id, token, confirmed) {
   const sh = sheet();
   const rows = sh.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (rows[i][0] === id && rows[i][11] === token) {
-      if (rows[i][10] !== "Ακυρώθηκε") {
+      const b = { id, date: cellDate(rows[i][2]), time: cellTime(rows[i][3]), end: cellTime(rows[i][4]), serviceName: rows[i][5], name: rows[i][6], phone: String(rows[i][7]), email: rows[i][8] };
+      if (rows[i][10] === "Ακυρώθηκε") return page("Το ραντεβού έχει ήδη ακυρωθεί", "Μπορείς να κλείσεις νέο ραντεβού όποτε θέλεις.");
+      if (dateAt(b.date, b.time).getTime() < Date.now()) return page("Το ραντεβού έχει περάσει", "Για οτιδήποτε κάλεσε στο " + CONFIG.SHOP_PHONE + ".");
+      if (!confirmed) {
+        const url = ScriptApp.getService().getUrl() + `?action=cancel&id=${encodeURIComponent(id)}&token=${encodeURIComponent(token)}&confirm=yes`;
+        return page("Ακύρωση ραντεβού;",
+          `${esc(b.serviceName)}<br><b style="color:#fff">${prettyDate(b.date)} στις ${b.time}</b>`,
+          `<a href="${url}" target="_top" style="display:inline-block;margin-top:22px;padding:14px 26px;background:#c9a45c;color:#0b0b0c;font-weight:700;text-decoration:none;border-radius:4px;letter-spacing:1px">ΝΑΙ, ΑΚΥΡΩΣΗ</a>`);
+      }
+      {
         sh.getRange(i + 1, 11).setValue("Ακυρώθηκε");
-        const b = { id, date: cellDate(rows[i][2]), time: cellTime(rows[i][3]), serviceName: rows[i][5], name: rows[i][6], phone: String(rows[i][7]), email: rows[i][8] };
+        forgetRecent(id);
+        bumpGen();
+        try { if (CONFIG.USE_CALENDAR) removeFromCalendar(id, b.date); } catch (err) { console.error(err); }
         try {
           MailApp.sendEmail({ to: ownerEmail(), subject: `❌ Ακύρωση: ${b.name} · ${prettyDate(b.date)} ${b.time}`,
-            htmlBody: mailShell(`<h2 style="margin:0 0 12px">Ακύρωση ραντεβού</h2><p>Ο/Η <b>${esc(b.name)}</b> ακύρωσε το ραντεβού:</p>${table(b)}`), name: CONFIG.SHOP_NAME });
-          if (CONFIG.USE_CALENDAR) removeFromCalendar(id, b.date);
+            htmlBody: mailShell(`<h2 style="margin:0 0 12px">Ακύρωση ραντεβού</h2><p>Ο/Η <b>${esc(b.name)}</b> ακύρωσε το ραντεβού:</p>${table(b)}<p style="font-size:12px;color:#888">Η ώρα ελευθερώθηκε στο site${CONFIG.USE_CALENDAR ? " και σβήστηκε από το Google Calendar σου" : ""}.</p>`), name: CONFIG.SHOP_NAME });
         } catch (err) { console.error(err); }
       }
-      return HtmlService.createHtmlOutput(simplePage("Το ραντεβού ακυρώθηκε", "Ευχαριστούμε που μας ενημέρωσες. Μπορείς να κλείσεις νέο ραντεβού όποτε θέλεις."));
+      return page("Το ραντεβού ακυρώθηκε", "Ευχαριστούμε που μας ενημέρωσες. Μπορείς να κλείσεις νέο ραντεβού όποτε θέλεις.");
     }
   }
-  return HtmlService.createHtmlOutput(simplePage("Δεν βρέθηκε", "Ο σύνδεσμος ακύρωσης δεν είναι έγκυρος."));
+  return page("Δεν βρέθηκε", "Ο σύνδεσμος ακύρωσης δεν είναι έγκυρος.");
+}
+function page(title, text, extra) {
+  return HtmlService.createHtmlOutput(simplePage(title, text, extra)).setTitle(CONFIG.SHOP_NAME);
 }
 
 /* ======================= EMAIL ======================= */
@@ -306,7 +365,28 @@ function sheet() {
   }
   return sh;
 }
-function json(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+function json(o) { return text(JSON.stringify(o)); }
+function text(s) { return ContentService.createTextOutput(s).setMimeType(ContentService.MimeType.JSON); }
+
+/* Cache generation: bumped on every booking/cancellation so the site never sees an old cached day. */
+function gen() { return CacheService.getScriptCache().get("gen") || "0"; }
+function bumpGen() { try { CacheService.getScriptCache().put("gen", String(Date.now()), 21600); } catch (err) { console.error(err); } }
+
+/* Online bookings of the last 5 minutes, kept apart from the calendar as a safety net. */
+function recentBookings() {
+  try {
+    const list = JSON.parse(CacheService.getScriptCache().get("recent") || "[]");
+    return list.filter(b => Date.now() - b.t < 5 * 60000);
+  } catch (err) { return []; }
+}
+function rememberRecent(b) {
+  const list = recentBookings().concat([{ id: b.id, date: b.date, start: b.time, end: b.end, t: Date.now() }]);
+  try { CacheService.getScriptCache().put("recent", JSON.stringify(list), 1800); } catch (err) { console.error(err); }
+}
+function forgetRecent(id) {
+  const list = recentBookings().filter(b => b.id !== id);
+  try { CacheService.getScriptCache().put("recent", JSON.stringify(list), 1800); } catch (err) { console.error(err); }
+}
 function toMin(t) { const p = String(t).split(":"); return +p[0] * 60 + +p[1]; }
 function toTime(m) { return ("0" + Math.floor(m / 60)).slice(-2) + ":" + ("0" + (m % 60)).slice(-2); }
 function dateAt(dateStr, time) { const d = dateStr.split("-").map(Number), t = time.split(":").map(Number); return new Date(d[0], d[1] - 1, d[2], t[0], t[1]); } // script timezone = Europe/Athens
@@ -314,9 +394,9 @@ function cellDate(v) { return v instanceof Date ? Utilities.formatDate(v, Sessio
 function cellTime(v) { return v instanceof Date ? Utilities.formatDate(v, Session.getScriptTimeZone(), "HH:mm") : String(v); }
 function prettyDate(s) { const d = dateAt(s, "12:00"); return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS_GEN[d.getMonth()]}`; }
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
-function simplePage(title, text) {
+function simplePage(title, text, extra) {
   return `<meta name="viewport" content="width=device-width,initial-scale=1"><div style="font-family:Helvetica,Arial;background:#0b0b0c;color:#fff;min-height:100vh;display:grid;place-items:center;text-align:center;padding:20px">
-  <div><div style="font-size:34px;font-weight:900;letter-spacing:4px">MAKHS</div><h1 style="color:#c9a45c">${title}</h1><p style="color:#aaa">${text}</p></div></div>`;
+  <div><div style="font-size:34px;font-weight:900;letter-spacing:4px">MAKHS</div><h1 style="color:#c9a45c">${title}</h1><p style="color:#aaa;line-height:1.6">${text}</p>${extra || ""}</div></div>`;
 }
 
 /** Run once from the editor to grant permissions and create the sheet. */

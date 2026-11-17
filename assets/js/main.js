@@ -9,18 +9,37 @@
   /* ---------- SPLASH ---------- */
   const splash = $("#splash");
   let splashDone = false;
+  const CUT_MS = 450, OPEN_MS = 800;
+  function reveal() {
+    document.body.classList.remove("is-loading");
+    document.body.classList.add("is-ready");
+  }
   function openSplash() {
     if (splashDone) return; splashDone = true;
+    if (reduced) { reveal(); splash.classList.add("is-gone"); return; }
+    // cut exactly through the middle of the letters
+    const w = $(".splash__word", splash).getBoundingClientRect();
+    if (w.height) splash.style.setProperty("--cut", `${((w.top + w.height * 0.52) / splash.offsetHeight * 100).toFixed(2)}%`);
     splash.classList.add("is-cutting");
     setTimeout(() => {
+      // the blade has cut the logo: give each half its own copy so the logo leaves WITH the screen
+      const content = $(".splash__content", splash), h = splash.offsetHeight;
+      ["top", "bottom"].forEach(side => {
+        const ghost = document.createElement("div");
+        ghost.className = `splash__ghost splash__ghost--${side}`;
+        ghost.style.height = h + "px";
+        const copy = content.cloneNode(true);
+        copy.classList.add("splash__content--ghost");
+        ghost.appendChild(copy);
+        $(`.splash__half--${side}`, splash).appendChild(ghost);
+      });
       splash.classList.add("is-open");
-      document.body.classList.remove("is-loading");
-      document.body.classList.add("is-ready");
-    }, reduced ? 0 : 480);
-    setTimeout(() => splash.classList.add("is-gone"), reduced ? 50 : 1700);
+      reveal();
+    }, CUT_MS);
+    setTimeout(() => splash.classList.add("is-gone"), CUT_MS + OPEN_MS + 50);
   }
   const seen = (() => { try { return sessionStorage.getItem("makhs-splash"); } catch { return null; } })();
-  const splashDelay = reduced ? 0 : (seen ? 900 : 1900);
+  const splashDelay = reduced ? 0 : (seen ? 450 : 1250);
   try { sessionStorage.setItem("makhs-splash", "1"); } catch {}
   // open as soon as fonts + hero image are ready (don't wait for the map iframe)
   const heroImg = document.querySelector(".hero__media img");
@@ -28,21 +47,23 @@
     document.fonts ? document.fonts.ready : Promise.resolve(),
     heroImg && !heroImg.complete ? new Promise(r => { heroImg.onload = heroImg.onerror = r; }) : Promise.resolve()
   ]).then(() => setTimeout(openSplash, splashDelay));
-  setTimeout(openSplash, 4500); // safety net
+  setTimeout(openSplash, 3500); // safety net on slow connections
   $(".splash__skip").addEventListener("click", openSplash);
   splash.addEventListener("click", openSplash);
 
   /* ---------- NAV ---------- */
   const nav = $("#nav"), burger = $("#burger"), mbar = $(".mbar");
-  let lastY = 0;
+  let lastY = 0, inBooking = false;
   function onScroll() {
     const y = scrollY;
     nav.classList.toggle("is-scrolled", y > 40);
     nav.classList.toggle("is-hidden", y > lastY && y > 500 && !nav.classList.contains("is-open"));
-    mbar && mbar.classList.toggle("is-visible", y > innerHeight * 0.7);
+    mbar && mbar.classList.toggle("is-visible", y > innerHeight * 0.7 && !inBooking);
     lastY = y;
   }
   addEventListener("scroll", onScroll, { passive: true }); onScroll();
+  // the sticky "book" bar is pointless (and covers the form) while the visitor is already booking
+  if ("IntersectionObserver" in window) new IntersectionObserver(en => { inBooking = en[0].isIntersecting; onScroll(); }, { rootMargin: "-30% 0px -30% 0px" }).observe($("#booking"));
   burger.addEventListener("click", () => {
     const open = nav.classList.toggle("is-open");
     burger.setAttribute("aria-expanded", open);
