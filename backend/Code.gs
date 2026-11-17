@@ -13,11 +13,20 @@
 
 /* ======================= CONFIG ======================= */
 const CONFIG = {
-  OWNER_EMAIL: "owner@example.com",          // ← το email του ιδιοκτήτη
+  /* Email που λαμβάνει τις κρατήσεις.
+     Κενό = ο λογαριασμός Google που κάνει το Deploy (δηλ. όποιος το εγκαταστήσει).
+     Έτσι δεν χρειάζεται να γραφτεί email μέσα στον κώδικα (το repo είναι δημόσιο). */
+  OWNER_EMAIL: "",
   SHOP_NAME: "Makhs Barber Shop",
   SHOP_ADDRESS: "Παπάγου 92, Ζωγράφου 157 72",
   SHOP_PHONE: "210 775 9949",
-  ADD_TO_CALENDAR: true,                     // βάζει το ραντεβού στο Google Calendar του ιδιοκτήτη
+  /* Google Calendar = η «αλήθεια» για τις ελεύθερες ώρες.
+     true  → κάθε γεγονός στο ημερολόγιο του Μάκη (ραντεβού από τηλέφωνο, «Κλειστά», άδεια…)
+             μπλοκάρει αυτή την ώρα στο site. Οι online κρατήσεις μπαίνουν κι αυτές στο ημερολόγιο.
+             Αν ο Μάκης σβήσει ένα γεγονός, η ώρα ελευθερώνεται.
+     false → οι ελεύθερες ώρες βγαίνουν μόνο από το Google Sheet (χωρίς ημερολόγιο). */
+  USE_CALENDAR: true,
+  CALENDAR_ID: "",                           // κενό = κύριο ημερολόγιο. Ή ID ξεχωριστού ημερολογίου π.χ. «Κουρείο»
   DAYS_AHEAD: 30,
   MIN_LEAD_MINUTES: 60,
   SHEET_NAME: "Κρατήσεις",
@@ -83,6 +92,11 @@ function doPost(e) {
       serviceId: v.serviceId, serviceName: v.service[0], price: v.service[2],
       name: v.name, phone: v.phone, email: v.email, notes: v.notes
     };
+    // In calendar mode the event IS the reservation, so create it inside the lock.
+    if (CONFIG.USE_CALENDAR) {
+      try { addToCalendar(booking); }
+      catch (err) { console.error(err); return json({ ok: false, error: "server", message: "Δεν ήταν δυνατή η κράτηση. Κάλεσε στο " + CONFIG.SHOP_PHONE + "." }); }
+    }
     sheet().appendRow([booking.id, booking.created, booking.date, booking.time, booking.end, booking.serviceName,
       booking.name, "'" + booking.phone, booking.email, booking.notes, "Ενεργό", booking.token]);
     SpreadsheetApp.flush();
@@ -90,7 +104,6 @@ function doPost(e) {
     lock.releaseLock();
   }
 
-  try { if (CONFIG.ADD_TO_CALENDAR) addToCalendar(booking); } catch (err) { console.error(err); }
   try { emailCustomer(booking); } catch (err) { console.error(err); }
   try { emailOwner(booking); } catch (err) { console.error(err); }
   return json({ ok: true, id: booking.id });
@@ -123,6 +136,7 @@ function validate(d) {
 
 function busyFor(dateStr) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr || "")) throw new Error("bad date");
+  if (CONFIG.USE_CALENDAR) return calendarBusy(dateStr);
   const rows = sheet().getDataRange().getValues().slice(1);
   return rows
     .filter(r => cellDate(r[2]) === dateStr && r[10] !== "Ακυρώθηκε")
@@ -138,9 +152,9 @@ function cancelPage(id, token) {
         sh.getRange(i + 1, 11).setValue("Ακυρώθηκε");
         const b = { id, date: cellDate(rows[i][2]), time: cellTime(rows[i][3]), serviceName: rows[i][5], name: rows[i][6], phone: String(rows[i][7]), email: rows[i][8] };
         try {
-          MailApp.sendEmail({ to: CONFIG.OWNER_EMAIL, subject: `❌ Ακύρωση: ${b.name} · ${prettyDate(b.date)} ${b.time}`,
+          MailApp.sendEmail({ to: ownerEmail(), subject: `❌ Ακύρωση: ${b.name} · ${prettyDate(b.date)} ${b.time}`,
             htmlBody: mailShell(`<h2 style="margin:0 0 12px">Ακύρωση ραντεβού</h2><p>Ο/Η <b>${esc(b.name)}</b> ακύρωσε το ραντεβού:</p>${table(b)}`), name: CONFIG.SHOP_NAME });
-          if (CONFIG.ADD_TO_CALENDAR) removeFromCalendar(id, b.date);
+          if (CONFIG.USE_CALENDAR) removeFromCalendar(id, b.date);
         } catch (err) { console.error(err); }
       }
       return HtmlService.createHtmlOutput(simplePage("Το ραντεβού ακυρώθηκε", "Ευχαριστούμε που μας ενημέρωσες. Μπορείς να κλείσεις νέο ραντεβού όποτε θέλεις."));
@@ -159,7 +173,7 @@ function emailCustomer(b) {
     <p style="margin:22px 0 6px">📍 <b>${CONFIG.SHOP_ADDRESS}</b><br>📞 ${CONFIG.SHOP_PHONE}</p>
     <p style="margin:22px 0 0;font-size:13px;color:#777">Δεν μπορείς να έρθεις; <a href="${cancelUrl}" style="color:#a8823a">Ακύρωσε το ραντεβού</a> ή κάλεσέ μας.</p>`);
   MailApp.sendEmail({
-    to: b.email, replyTo: CONFIG.OWNER_EMAIL, name: CONFIG.SHOP_NAME,
+    to: b.email, replyTo: ownerEmail(), name: CONFIG.SHOP_NAME,
     subject: `Επιβεβαίωση ραντεβού · ${prettyDate(b.date)} στις ${b.time}`,
     htmlBody: html, attachments: [ics(b)]
   });
@@ -174,9 +188,9 @@ function emailOwner(b) {
     <b>Τηλ:</b> <a href="tel:${intl}">${esc(b.phone)}</a> · <a href="https://wa.me/${intl.replace("+", "")}">WhatsApp</a><br>
     <b>Email:</b> <a href="mailto:${esc(b.email)}">${esc(b.email)}</a></p>
     ${b.notes ? `<p style="background:#f6f1e6;padding:12px 14px;border-radius:6px"><b>Σημείωση:</b> ${esc(b.notes)}</p>` : ""}
-    <p style="font-size:12px;color:#888">Κωδικός κράτησης: ${b.id}</p>`);
+    <p style="font-size:12px;color:#888">Κωδικός κράτησης: ${b.id}${CONFIG.USE_CALENDAR ? "<br>Το ραντεβού μπήκε στο Google Calendar σου. Για ακύρωση, σβήσε το γεγονός και η ώρα ελευθερώνεται στο site." : ""}</p>`);
   MailApp.sendEmail({
-    to: CONFIG.OWNER_EMAIL, replyTo: b.email, name: "Κρατήσεις Website",
+    to: ownerEmail(), replyTo: b.email, name: "Κρατήσεις Website",
     subject: `💈 Νέο ραντεβού: ${b.name} · ${prettyDate(b.date)} ${b.time}`,
     htmlBody: html
   });
@@ -212,15 +226,36 @@ function ics(b) {
 }
 
 /* ======================= CALENDAR ======================= */
+function cal() {
+  const c = CONFIG.CALENDAR_ID ? CalendarApp.getCalendarById(CONFIG.CALENDAR_ID) : CalendarApp.getDefaultCalendar();
+  if (!c) throw new Error("Calendar not found: " + CONFIG.CALENDAR_ID);
+  return c;
+}
+
+/** Busy intervals for one day from the owner's calendar.
+ *  Any event blocks its time; an all-day event (e.g. «Κλειστά», «Άδεια») blocks the whole day. */
+function calendarBusy(dateStr) {
+  const dayStart = dateAt(dateStr, "00:00");
+  const dayEnd = new Date(dayStart.getTime() + 86400000);
+  return cal().getEvents(dayStart, dayEnd)
+    .filter(ev => ev.getMyStatus() !== CalendarApp.GuestStatus.NO) // ignore invitations he declined
+    .map(ev => {
+      if (ev.isAllDayEvent()) return { start: "00:00", end: "23:59" };
+      const s = ev.getStartTime() < dayStart ? dayStart : ev.getStartTime();
+      const e = ev.getEndTime() >= dayEnd ? null : ev.getEndTime();
+      return { start: cellTime(s), end: e ? cellTime(e) : "23:59" };
+    });
+}
+
 function addToCalendar(b) {
-  const ev = CalendarApp.getDefaultCalendar().createEvent(
+  const ev = cal().createEvent(
     `💈 ${b.name} · ${b.serviceName}`, dateAt(b.date, b.time), dateAt(b.date, b.end),
     { description: `Τηλ: ${b.phone}\nEmail: ${b.email}${b.notes ? "\nΣημείωση: " + b.notes : ""}\nID: ${b.id}`, location: CONFIG.SHOP_ADDRESS });
   ev.setTag("makhsId", b.id);
 }
 function removeFromCalendar(id, dateStr) {
   const day = dateAt(dateStr, "00:00"), next = new Date(day.getTime() + 86400000);
-  CalendarApp.getDefaultCalendar().getEvents(day, next).forEach(ev => { if (ev.getTag("makhsId") === id) ev.deleteEvent(); });
+  cal().getEvents(day, next).forEach(ev => { if (ev.getTag("makhsId") === id) ev.deleteEvent(); });
 }
 
 /* ======================= HELPERS ======================= */
@@ -252,7 +287,12 @@ function simplePage(title, text) {
 /** Run once from the editor to grant permissions and create the sheet. */
 function setup() {
   sheet();
-  if (CONFIG.ADD_TO_CALENDAR) CalendarApp.getDefaultCalendar();
+  if (CONFIG.USE_CALENDAR) Logger.log("Calendar: " + cal().getName());
   MailApp.getRemainingDailyQuota();
-  Logger.log("OK — sheet ready. Now Deploy → New deployment → Web app.");
+  Logger.log("OK — sheet ready. Οι κρατήσεις θα πηγαίνουν στο: " + ownerEmail() + ". Τώρα: Deploy → New deployment → Web app.");
+}
+
+/** Owner email: CONFIG.OWNER_EMAIL, or the Google account that deployed the web app. */
+function ownerEmail() {
+  return CONFIG.OWNER_EMAIL || Session.getEffectiveUser().getEmail();
 }

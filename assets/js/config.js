@@ -20,7 +20,7 @@ window.SITE_CONFIG = {
 
   /* URL του Google Apps Script (δείτε README → «Ενεργοποίηση κρατήσεων»).
      Όσο είναι κενό, οι κρατήσεις τρέχουν σε DEMO λειτουργία (αποθηκεύονται μόνο στον browser). */
-  bookingApiUrl: "",
+  bookingApiUrl: "https://script.google.com/macros/s/AKfycbzcvxLF0GD2xp6uVc08Pw9QmZZSQll5SyOK17pcowMcf7dmCKlKPExJ92Sa_l-d-nA/exec",
 
   /* Υπηρεσίες — ΟΙ ΤΙΜΕΣ ΕΙΝΑΙ ΕΝΔΕΙΚΤΙΚΕΣ, επιβεβαιώστε με τον ιδιοκτήτη.
      Το id και η διάρκεια πρέπει να ταιριάζουν με το backend/Code.gs */
