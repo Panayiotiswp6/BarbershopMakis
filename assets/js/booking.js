@@ -11,7 +11,10 @@
 (() => {
   const C = window.SITE_CONFIG;
   const API = (C.bookingApiUrl || "").trim();
-  const DEMO = !API;
+  // When the site is shown inside a preview frame (e.g. an editor or the Claude preview), outside requests
+  // to Google are blocked, so bookings run in test mode there. The live site is never framed.
+  const FRAMED = (() => { try { return window.self !== window.top; } catch { return true; } })();
+  const DEMO = !API || FRAMED;
   const AHEAD = C.booking.daysAhead;
   const FRESH_MS = 45 * 1000;          // availability older than this is refreshed in the background
   const $ = (s, r = document) => r.querySelector(s);
@@ -49,7 +52,10 @@
   state.view = new Date(today().getFullYear(), today().getMonth(), 1);
   const cache = { days: {}, at: 0, loading: null, failed: false, rangeOk: true, dayLoading: {} };
 
-  if (DEMO) $("#demoNote").hidden = false;
+  if (DEMO) {
+    $("#demoNote").hidden = false;
+    if (API && FRAMED) $("#demoNote").textContent = "Προεπισκόπηση: εδώ οι κρατήσεις είναι δοκιμαστικές και δεν στέλνονται στο κουρείο. Στο κανονικό site οι ώρες έρχονται από το ημερολόγιο του Μάκη.";
+  }
 
   /* ---------- network ---------- */
   async function getJSON(url, opts = {}, timeout = 15000) {
@@ -161,7 +167,7 @@
     if (step === 3) renderSummary();
   }
   $$("[data-back]").forEach(b => b.addEventListener("click", () => go(state.step - 1)));
-  $$(".steps li").forEach(li => li.addEventListener("click", () => { if (+li.dataset.step < state.step && state.step < 4) go(+li.dataset.step); }));
+  $$(".steps li").forEach(li => li.addEventListener("click", () => { if (+li.dataset.step < state.step && state.step < 5) go(+li.dataset.step); }));
 
   /* ---------- step 1: services ---------- */
   $("#svcPick").innerHTML = C.services.map(s => `
@@ -288,7 +294,7 @@
     if (state.autoPick && !state.date && (cache.at || !cache.rangeOk)) { state.date = firstFreeDay(); if (state.date) state.autoPick = false; }
     renderCal();
     if (state.step === 2) renderSlots();
-    if (state.step === 3 && state.date && state.time) {
+    if ((state.step === 3 || state.step === 4) && state.date && state.time) {
       const info = dayInfo(state.date);
       if (!info.ok || !info.slots || !info.slots.some(s => s.t === state.time)) {
         err.textContent = "Η ώρα που διάλεξες μόλις έκλεισε. Διάλεξε άλλη.";
@@ -305,8 +311,8 @@
   if (bookingEl && "IntersectionObserver" in window) {
     new IntersectionObserver((en, o) => { if (en[0].isIntersecting) { loadRange(); o.disconnect(); } }, { rootMargin: "800px 0px" }).observe(bookingEl);
   }
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && state.step >= 2 && state.step < 4) loadRange(); });
-  setInterval(() => { if (!document.hidden && (state.step === 2 || state.step === 3)) loadRange(); }, 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && state.step >= 2 && state.step < 5) loadRange(); });
+  setInterval(() => { if (!document.hidden && state.step >= 2 && state.step <= 4) loadRange(); }, 60 * 1000);
 
   /* ---------- step 3: details ---------- */
   const form = $("#bookingForm"), err = $("#formError"), btn = $("#submitBtn");
@@ -330,9 +336,10 @@
 
   const rid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 
-  form.addEventListener("submit", async e => {
+  /* Step 3 → 4: check the details and show the email exactly as it will be sent */
+  let pending = null;
+  form.addEventListener("submit", e => {
     e.preventDefault();
-    if (btn.disabled) return;
     err.textContent = "";
     $$(".field", form).forEach(f => f.classList.remove("is-invalid"));
     if (!state.service || !state.date || !state.time) { go(state.service ? 2 : 1); return; }
@@ -347,7 +354,7 @@
       err.textContent = "Συμπλήρωσε σωστά όνομα, κινητό και email.";
       return;
     }
-    const payload = {
+    pending = {
       action: "book",
       rid: rid(),                  // same id on a retry → the server never books twice
       service: state.service.id,
@@ -356,10 +363,42 @@
       name: v.name.trim(), phone: v.phone.trim(), email: v.email.trim(), notes: (v.notes || "").trim(),
       website: v.website || "" // honeypot
     };
-    btn.disabled = true; btn.textContent = "Κλείνουμε το ραντεβού…";
+    renderDraft(pending);
+    go(4);
+    $("#bookingApp").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  const esc = t => String(t).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  /** Same content as the confirmation email the server sends (backend/Code.gs → emailCustomer). */
+  function renderDraft(p) {
+    const s = state.service, end = toTime(toMin(p.time) + s.duration), day = prettyDate(state.date);
+    $("#draftTo").textContent = p.email;
+    $("#draftSubject").textContent = `Επιβεβαίωση ραντεβού · ${day} στις ${p.time}`;
+    $("#draftBody").innerHTML = `
+      <p class="draft__hello">Γεια σου ${esc(p.name.split(" ")[0])}, σε περιμένουμε!</p>
+      <table class="draft__table">
+        <tr><th>Υπηρεσία</th><td>${esc(s.name)}</td></tr>
+        <tr><th>Ημέρα</th><td>${day}</td></tr>
+        <tr><th>Ώρα</th><td>${p.time}–${end}</td></tr>
+        <tr><th>Τιμή</th><td>${s.price}€</td></tr>
+        <tr><th>Όνομα</th><td>${esc(p.name)}</td></tr>
+        <tr><th>Κινητό</th><td>${esc(p.phone)}</td></tr>
+        ${p.notes ? `<tr><th>Σημείωση</th><td>${esc(p.notes)}</td></tr>` : ""}
+      </table>
+      <p class="draft__shop">${esc(C.shop.address)}<br>${esc(C.shop.phone)}</p>
+      <p class="draft__foot">Θα πάρεις και αρχείο για το ημερολόγιό σου, καθώς και link για ακύρωση αν δεν μπορείς να έρθεις.</p>`;
+  }
+
+  /* Step 4: «Αποστολή email» books the slot; the server sends the emails and adds it to Google Calendar */
+  const sendBtn = $("#sendBtn"), sendErr = $("#sendError");
+  sendBtn.addEventListener("click", async () => {
+    if (sendBtn.disabled || !pending) return;
+    sendErr.textContent = "";
+    const payload = pending;
+    sendBtn.disabled = true; sendBtn.textContent = "Αποστολή…";
     try {
       let result;
-      if (DEMO) { await sleep(500); result = demoBook(payload); }
+      if (DEMO) { await sleep(600); result = demoBook(payload); }
       else {
         const send = () => getJSON(API, {
           method: "POST",
@@ -371,33 +410,35 @@
       }
       if (!result.ok) {
         if (["slot_taken", "too_soon", "closed"].includes(result.error)) {
-          err.textContent = result.error === "slot_taken"
+          sendErr.textContent = result.error === "slot_taken"
             ? "Αυτή η ώρα μόλις κλείστηκε. Διάλεξε άλλη ώρα."
             : (result.message || "Η ώρα αυτή δεν είναι πλέον διαθέσιμη.") + " Διάλεξε άλλη ώρα.";
-          state.time = null;
+          state.time = null; pending = null;
           loadRange(true);
-          setTimeout(() => { err.textContent = ""; go(2); renderSlots(); }, 1800);
-        } else err.textContent = result.message || `Κάτι πήγε στραβά. Δοκίμασε ξανά ή κάλεσε στο ${C.shop.phone}.`;
+          setTimeout(() => { sendErr.textContent = ""; go(2); renderSlots(); }, 1800);
+        } else sendErr.textContent = result.message || `Κάτι πήγε στραβά. Δοκίμασε ξανά ή κάλεσε στο ${C.shop.phone}.`;
         return;
       }
       try { localStorage.setItem(SAVED, JSON.stringify({ name: payload.name, phone: payload.phone, email: payload.email })); } catch {}
       // mark the slot as taken right away (the next refresh confirms it)
       (cache.days[payload.date] = cache.days[payload.date] || []).push({ start: payload.time, end: toTime(toMin(payload.time) + state.service.duration) });
+      pending = null;
       done(payload, result.id, result.mail !== false);
     } catch (ex) {
-      err.innerHTML = `Δεν ήταν δυνατή η σύνδεση. Δοκίμασε ξανά ή κάλεσε στο ${phoneLink}.`;
+      sendErr.innerHTML = `Δεν ήταν δυνατή η σύνδεση. Δοκίμασε ξανά ή κάλεσε στο ${phoneLink}.`;
     } finally {
-      btn.disabled = false; btn.textContent = "Επιβεβαίωση ραντεβού";
+      sendBtn.disabled = false; sendBtn.textContent = "Αποστολή email";
     }
   });
 
   function done(p, id, mailed) {
     const s = state.service, end = toTime(toMin(p.time) + s.duration);
+    const when = `<b>${s.name}</b>, ${prettyDate(state.date)} στις <b>${p.time}</b>`;
     $("#doneText").innerHTML = DEMO
-      ? `<b>${s.name}</b>, ${prettyDate(state.date)} στις <b>${p.time}</b>.<br>(Λειτουργία επίδειξης: όταν συνδεθεί το email του κουρείου, εδώ θα σταλεί αυτόματα επιβεβαίωση στο <b>${p.email}</b> και ειδοποίηση στον Μάκη.)`
+      ? `${when}.<br>Προεπισκόπηση: εδώ δεν στέλνεται email. Στο κανονικό site το email πηγαίνει στο <b>${esc(p.email)}</b> και το ραντεβού μπαίνει στο ημερολόγιο του κουρείου.`
       : mailed
-        ? `<b>${s.name}</b>, ${prettyDate(state.date)} στις <b>${p.time}</b>.<br>Στείλαμε επιβεβαίωση στο <b>${p.email}</b>${id ? ` (κωδικός ${id})` : ""}. Τα λέμε σύντομα!`
-        : `<b>${s.name}</b>, ${prettyDate(state.date)} στις <b>${p.time}</b>${id ? ` (κωδικός <b>${id}</b>)` : ""}.<br>Το ραντεβού σου είναι κλεισμένο, αλλά αυτή τη φορά δεν μπορέσαμε να στείλουμε email επιβεβαίωσης. Πρόσθεσέ το στο ημερολόγιό σου με το κουμπί παρακάτω. Για οτιδήποτε κάλεσε στο ${phoneLink}.`;
+        ? `${when}.<br>Το email επιβεβαίωσης στάλθηκε στο <b>${esc(p.email)}</b>${id ? ` (κωδικός ${id})` : ""}. Τα λέμε σύντομα!`
+        : `${when}${id ? ` (κωδικός <b>${id}</b>)` : ""}.<br>Το ραντεβού σου είναι καταχωρημένο, αλλά αυτή τη φορά δεν μπορέσαμε να στείλουμε email. Πρόσθεσέ το στο ημερολόγιό σου με το κουμπί παρακάτω. Για οτιδήποτε κάλεσε στο ${phoneLink}.`;
     const dt = t => p.date.replace(/-/g, "") + "T" + t.replace(":", "") + "00";
     $("#gcalLink").href = "https://calendar.google.com/calendar/render?action=TEMPLATE"
       + `&text=${encodeURIComponent(`${s.name} · ${C.shop.fullName}`)}`
@@ -405,11 +446,12 @@
       + `&location=${encodeURIComponent(C.shop.address)}`
       + `&details=${encodeURIComponent(`Τηλ. ${C.shop.phone}`)}`;
     $("#fNotes").value = "";
-    go(4);
+    go(5);
     $("#bookingApp").scrollIntoView({ behavior: "smooth", block: "start" });
   }
+  $("#editBtn").addEventListener("click", () => go(3));
   $("#newBooking").addEventListener("click", () => {
-    state.service = null; state.time = null; state.date = null;
+    state.service = null; state.time = null; state.date = null; pending = null;
     $$(".svc-opt").forEach(b => b.classList.remove("is-selected"));
     go(1);
   });

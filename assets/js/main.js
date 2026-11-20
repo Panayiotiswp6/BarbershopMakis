@@ -1,108 +1,163 @@
-/* MAKHS BARBER SHOP — UI, effects */
+/* Makhs Barber Shop: splash, menu, prices, hours, gallery */
 (() => {
   const C = window.SITE_CONFIG;
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const euro = n => `${n}€`;
 
-  /* ---------- SPLASH ---------- */
+  /* Splash (home page only). Skipped when the visitor arrives at a section, e.g. index.html#booking */
   const splash = $("#splash");
-  let splashDone = false;
-  const CUT_MS = 450, OPEN_MS = 800;
-  function reveal() {
-    document.body.classList.remove("is-loading");
-    document.body.classList.add("is-ready");
+  if (splash) {
+    let done = false;
+    const CUT_MS = 450, OPEN_MS = 800;
+    const reveal = () => document.body.classList.remove("is-loading");
+    const finish = () => { reveal(); splash.classList.add("is-gone"); };
+    const open = () => {
+      if (done) return; done = true;
+      if (reduced) return finish();
+      // cut exactly through the middle of the letters
+      const w = $(".splash__word", splash).getBoundingClientRect();
+      if (w.height) splash.style.setProperty("--cut", `${((w.top + w.height * 0.52) / splash.offsetHeight * 100).toFixed(2)}%`);
+      splash.classList.add("is-cutting");
+      setTimeout(() => {
+        // each half takes its own copy of the logo, so the logo leaves with the screen
+        const content = $(".splash__content", splash), h = splash.offsetHeight;
+        ["top", "bottom"].forEach(side => {
+          const ghost = document.createElement("div");
+          ghost.className = `splash__ghost splash__ghost--${side}`;
+          ghost.style.height = h + "px";
+          const copy = content.cloneNode(true);
+          copy.classList.add("splash__content--ghost");
+          ghost.appendChild(copy);
+          $(`.splash__half--${side}`, splash).appendChild(ghost);
+        });
+        splash.classList.add("is-open");
+        reveal();
+      }, CUT_MS);
+      setTimeout(() => splash.classList.add("is-gone"), CUT_MS + OPEN_MS + 50);
+    };
+    let skip = false;
+    try { skip = sessionStorage.getItem("makhs-nosplash") === "1"; sessionStorage.removeItem("makhs-nosplash"); } catch {}
+    if (skip) { done = true; finish(); }
+    else {
+      const seen = (() => { try { return sessionStorage.getItem("makhs-splash"); } catch { return null; } })();
+      try { sessionStorage.setItem("makhs-splash", "1"); } catch {}
+      const delay = reduced ? 0 : (seen ? 450 : 1250);
+      const heroImg = $(".hero__photo img");
+      Promise.all([
+        document.fonts ? document.fonts.ready : Promise.resolve(),
+        heroImg && !heroImg.complete ? new Promise(r => { heroImg.onload = heroImg.onerror = r; }) : Promise.resolve()
+      ]).then(() => setTimeout(open, delay));
+      setTimeout(open, 3500); // safety net on slow connections
+      splash.addEventListener("click", open);
+    }
   }
-  function openSplash() {
-    if (splashDone) return; splashDone = true;
-    if (reduced) { reveal(); splash.classList.add("is-gone"); return; }
-    // cut exactly through the middle of the letters
-    const w = $(".splash__word", splash).getBoundingClientRect();
-    if (w.height) splash.style.setProperty("--cut", `${((w.top + w.height * 0.52) / splash.offsetHeight * 100).toFixed(2)}%`);
-    splash.classList.add("is-cutting");
-    setTimeout(() => {
-      // the blade has cut the logo: give each half its own copy so the logo leaves WITH the screen
-      const content = $(".splash__content", splash), h = splash.offsetHeight;
-      ["top", "bottom"].forEach(side => {
-        const ghost = document.createElement("div");
-        ghost.className = `splash__ghost splash__ghost--${side}`;
-        ghost.style.height = h + "px";
-        const copy = content.cloneNode(true);
-        copy.classList.add("splash__content--ghost");
-        ghost.appendChild(copy);
-        $(`.splash__half--${side}`, splash).appendChild(ghost);
-      });
-      splash.classList.add("is-open");
-      reveal();
-    }, CUT_MS);
-    setTimeout(() => splash.classList.add("is-gone"), CUT_MS + OPEN_MS + 50);
-  }
-  const seen = (() => { try { return sessionStorage.getItem("makhs-splash"); } catch { return null; } })();
-  const splashDelay = reduced ? 0 : (seen ? 450 : 1250);
-  try { sessionStorage.setItem("makhs-splash", "1"); } catch {}
-  // open as soon as fonts + hero image are ready (don't wait for the map iframe)
-  const heroImg = document.querySelector(".hero__media img");
-  Promise.all([
-    document.fonts ? document.fonts.ready : Promise.resolve(),
-    heroImg && !heroImg.complete ? new Promise(r => { heroImg.onload = heroImg.onerror = r; }) : Promise.resolve()
-  ]).then(() => setTimeout(openSplash, splashDelay));
-  setTimeout(openSplash, 3500); // safety net on slow connections
-  $(".splash__skip").addEventListener("click", openSplash);
-  splash.addEventListener("click", openSplash);
 
-  /* ---------- NAV ---------- */
-  const nav = $("#nav"), burger = $("#burger"), mbar = $(".mbar");
-  let lastY = 0, inBooking = false;
-  function onScroll() {
-    const y = scrollY;
-    nav.classList.toggle("is-scrolled", y > 40);
-    nav.classList.toggle("is-hidden", y > lastY && y > 500 && !nav.classList.contains("is-open"));
-    mbar && mbar.classList.toggle("is-visible", y > innerHeight * 0.7 && !inBooking);
-    lastY = y;
-  }
-  addEventListener("scroll", onScroll, { passive: true }); onScroll();
-  // the sticky "book" bar is pointless (and covers the form) while the visitor is already booking
-  if ("IntersectionObserver" in window) new IntersectionObserver(en => { inBooking = en[0].isIntersecting; onScroll(); }, { rootMargin: "-30% 0px -30% 0px" }).observe($("#booking"));
-  burger.addEventListener("click", () => {
-    const open = nav.classList.toggle("is-open");
+  /* Every page opens at the top, unless the link points to a section (e.g. index.html#booking) */
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+  const hashTarget = () => location.hash.length > 1 && document.getElementById(decodeURIComponent(location.hash.slice(1)));
+  const toTop = () => { if (!hashTarget()) scrollTo(0, 0); };
+  toTop();
+  addEventListener("pageshow", toTop);
+
+  /* Mobile menu */
+  const header = $("#header"), burger = $("#burger");
+  const setMenu = open => {
+    header.classList.toggle("is-open", open);
     burger.setAttribute("aria-expanded", open);
     document.body.style.overflow = open ? "hidden" : "";
-  });
-  $$("#navLinks a").forEach(a => a.addEventListener("click", () => {
-    nav.classList.remove("is-open"); burger.setAttribute("aria-expanded", false); document.body.style.overflow = "";
-  }));
+  };
+  burger.addEventListener("click", () => setMenu(!header.classList.contains("is-open")));
+  $$("#menu a").forEach(a => a.addEventListener("click", () => setMenu(false)));
+  addEventListener("keydown", e => { if (e.key === "Escape") setMenu(false); });
 
-  /* ---------- CONTENT FROM CONFIG ---------- */
-  $("#heroPrices").innerHTML = C.services.map(s => `<li><span>${s.name}</span><b>${euro(s.price)}</b></li>`).join("");
-  $("#servicesGrid").innerHTML = C.services.map((s, i) => `
-    <article class="svc reveal" style="--d:${(i % 3) * 0.08}s">
-      <span class="svc__num">${String(i + 1).padStart(2, "0")}</span>
-      <div class="svc__top"><h3>${s.name}</h3><span class="svc__price">${euro(s.price)}</span></div>
-      <span class="svc__dur">◷ ${s.duration} λεπτά</span>
-      <p>${s.desc}</p>
-      <button class="svc__book" type="button" data-book="${s.id}">Κλείσε <span>→</span></button>
-    </article>`).join("");
+  /* Header border once the page scrolls */
+  const onScroll = () => header.classList.toggle("is-scrolled", scrollY > 8);
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  /* A click from another page to a section of the home page (e.g. "Κλείσε ραντεβού") lands there without the splash */
+  document.addEventListener("click", e => {
+    const a = e.target.closest("a[href]");
+    if (!a || a.target === "_blank") return;
+    const url = new URL(a.href, location.href);
+    const toHome = url.origin === location.origin && /(\/|index\.html)$/.test(url.pathname);
+    if (toHome && url.hash.length > 1 && url.pathname !== location.pathname) {
+      try { sessionStorage.setItem("makhs-nosplash", "1"); } catch {}
+    }
+  }, true);
+
+  /* A link to the page you are already on (e.g. "Κριτικές" while reading the reviews) glides to the top instead of reloading */
+  document.addEventListener("click", e => {
+    const a = e.target.closest("a[href]");
+    if (!a || a.target === "_blank" || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    const url = new URL(a.href, location.href);
+    if (url.origin !== location.origin || url.pathname !== location.pathname) return;
+    if (url.hash && url.hash !== "#top") return;               // section links scroll to their section
+    e.preventDefault();
+    setMenu(false);
+    scrollTo({ top: 0, behavior: reduced ? "auto" : "smooth" });
+  });
+
+  /* Smooth page changes. Modern browsers use cross-document view transitions (CSS);
+     the rest get a short fade-out here and a fade-in from CSS. */
+  const root = document.documentElement;
+  if (root.classList.contains("fade-nav") && !reduced) {
+    document.addEventListener("click", e => {
+      const a = e.target.closest("a[href]");
+      if (!a || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || a.target === "_blank") return;
+      const url = new URL(a.href, location.href);
+      if (url.origin !== location.origin || !/^https?:$/.test(url.protocol)) return;
+      if (url.pathname === location.pathname) return;          // same page: handled below
+      e.preventDefault();
+      setMenu(false);
+      root.classList.add("is-leaving");
+      setTimeout(() => { location.href = url.href; }, 200);
+    });
+    addEventListener("pageshow", () => root.classList.remove("is-leaving"));
+  }
+
+  /* Arriving from another page at a section (e.g. index.html#booking): glide to it instead of jumping */
+  if (location.hash.length > 1 && !reduced && !splash) {
+    const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+    if (target) {
+      if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+      scrollTo(0, 0);
+      requestAnimationFrame(() => setTimeout(() => target.scrollIntoView({ behavior: "smooth" }), 120));
+    }
+  }
+
+  /* Price list from config */
+  const priceList = $("#priceList");
+  if (priceList) priceList.innerHTML = C.services.map(s => `
+    <li class="price">
+      <div class="price__main">
+        <h3>${s.name}</h3>
+        <p>${s.desc}</p>
+      </div>
+      <span class="price__dur">${s.duration} λεπτά</span>
+      <span class="price__eur">${s.price} €</span>
+      <button class="btn btn--outline btn--sm" type="button" data-book="${s.id}" aria-label="Κλείσε ραντεβού για ${s.name}">Κλείσε</button>
+    </li>`).join("");
   $$("[data-book]").forEach(b => b.addEventListener("click", () => {
     window.MakhsBooking && window.MakhsBooking.selectService(b.dataset.book);
-    $("#booking").scrollIntoView({ behavior: reduced ? "auto" : "smooth" });
+    $("#booking").scrollIntoView({ behavior: "smooth" });
   }));
-  $("#year").textContent = new Date().getFullYear();
-  if (C.shop.facebook) $("#fbLink").href = C.shop.facebook;
 
-  /* hours + open now */
-  const dayNames = ["Κυριακή", "Δευτέρα", "Τρίτη", "Τετάρτη", "Πέμπτη", "Παρασκευή", "Σάββατο"];
+  /* Hours table and "open now" */
+  const days = ["Κυριακή", "Δευτέρα", "Τρίτη", "Τετάρτη", "Πέμπτη", "Παρασκευή", "Σάββατο"];
   const now = new Date(), today = now.getDay();
-  $("#hoursTable").innerHTML = [1, 2, 3, 4, 5, 6, 0].map(d => {
-    const h = C.hours[d];
-    const txt = h.length ? h.map(([a, b]) => `${a}–${b}`).join(" · ") : "Κλειστά";
-    return `<tr class="${d === today ? "is-today" : ""}"><td>${dayNames[d]}</td><td>${txt}</td></tr>`;
-  }).join("");
+  const fmtRanges = r => r.length ? r.map(([a, b]) => `${a}–${b}`).join(", ") : "Κλειστά";
+  const hoursTable = $("#hoursTable");
+  if (hoursTable) hoursTable.innerHTML = [1, 2, 3, 4, 5, 6, 0].map(d =>
+    `<tr${d === today ? ' class="is-today"' : ""}><th scope="row">${days[d]}</th><td>${fmtRanges(C.hours[d])}</td></tr>`
+  ).join("");
+
   const mins = t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
   const nowM = now.getHours() * 60 + now.getMinutes();
-  const openRange = (C.hours[today] || []).find(([a, b]) => nowM >= mins(a) && nowM < mins(b));
-  const openEl = $("#openNow");
-  if (openRange) { openEl.textContent = `Ανοιχτά τώρα · έως ${openRange[1]}`; openEl.classList.add("is-open"); }
+  const open = (C.hours[today] || []).find(([a, b]) => nowM >= mins(a) && nowM < mins(b));
+  let text, cls;
+  if (open) { text = `Ανοιχτά τώρα, μέχρι τις ${open[1]}`; cls = "is-open"; }
   else {
     let next = null;
     for (let i = 0; i < 8 && !next; i++) {
@@ -110,77 +165,39 @@
       const r = (C.hours[d] || []).find(([a]) => i > 0 || mins(a) > nowM);
       if (r) next = { d, i, t: r[0] };
     }
-    openEl.textContent = next ? `Κλειστά · ανοίγει ${next.i === 0 ? "σήμερα" : next.i === 1 ? "αύριο" : dayNames[next.d]} ${next.t}` : "Κλειστά";
-    openEl.classList.add("is-closed");
+    const when = !next ? "" : next.i === 0 ? `σήμερα στις ${next.t}` : next.i === 1 ? `αύριο στις ${next.t}` : `${days[next.d]} στις ${next.t}`;
+    text = next ? `Κλειστά τώρα. Ανοίγει ${when}` : "Κλειστά";
+    cls = "is-closed";
   }
+  ["#heroStatus", "#openNow"].forEach(id => { const el = $(id); if (!el) return; el.textContent = text; el.classList.add(cls); });
 
-  /* ---------- REVEAL ON SCROLL ---------- */
-  const io = new IntersectionObserver(entries => entries.forEach(e => {
-    if (e.isIntersecting) { e.target.classList.add("is-in"); io.unobserve(e.target); }
-  }), { threshold: 0.14, rootMargin: "0px 0px -40px 0px" });
-  $$(".reveal").forEach((el, i) => {
-    if (!el.style.getPropertyValue("--d") && el.parentElement.classList.contains("gallery")) el.style.setProperty("--d", `${(i % 4) * 0.07}s`);
-    io.observe(el);
+  $("#year").textContent = now.getFullYear();
+  if (C.shop.facebook && $("#fbLink")) { $("#fbLink").href = C.shop.facebook; $("#fbWrap").hidden = false; }
+
+  /* Lightbox */
+  const lb = $("#lightbox");
+  if (!lb) return;
+  const lbImg = $("img", lb), imgs = $$("#gallery img");
+  let idx = 0, lastFocus = null;
+  const show = i => { idx = (i + imgs.length) % imgs.length; lbImg.src = imgs[idx].src; lbImg.alt = imgs[idx].alt; };
+  const close = () => { lb.hidden = true; document.body.style.overflow = ""; lastFocus && lastFocus.focus(); };
+  imgs.forEach((img, i) => {
+    const fig = img.parentElement;
+    fig.tabIndex = 0;
+    fig.setAttribute("role", "button");
+    fig.setAttribute("aria-label", `Μεγέθυνση: ${img.alt}`);
+    const openLb = () => { lastFocus = fig; show(i); lb.hidden = false; document.body.style.overflow = "hidden"; $(".lightbox__close").focus(); };
+    fig.addEventListener("click", openLb);
+    fig.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openLb(); } });
   });
-
-  /* counters */
-  const cio = new IntersectionObserver(entries => entries.forEach(e => {
-    if (!e.isIntersecting) return;
-    const el = e.target, end = +el.dataset.count, dec = +(el.dataset.decimals || 0), suf = el.dataset.suffix || "";
-    const t0 = performance.now(), dur = reduced ? 1 : 1600;
-    const step = t => {
-      const p = Math.min(1, (t - t0) / dur), v = end * (1 - Math.pow(1 - p, 4));
-      el.textContent = v.toFixed(dec).replace(".", ",") + (p === 1 ? suf : "");
-      if (p < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step); cio.unobserve(el);
-  }), { threshold: 0.6 });
-  $$("[data-count]").forEach(el => cio.observe(el));
-
-  /* ---------- PARALLAX ---------- */
-  const par = $$("[data-parallax]");
-  if (!reduced && par.length) {
-    let ticking = false;
-    addEventListener("scroll", () => {
-      if (ticking) return; ticking = true;
-      requestAnimationFrame(() => {
-        par.forEach(el => { if (scrollY < innerHeight * 1.2) el.style.transform = `translate3d(0, ${scrollY * el.dataset.parallax}px, 0)`; });
-        ticking = false;
-      });
-    }, { passive: true });
-  }
-
-  /* ---------- TILT ---------- */
-  if (!reduced && matchMedia("(hover: hover)").matches) {
-    $$("[data-tilt]").forEach(el => {
-      el.addEventListener("mousemove", e => {
-        const r = el.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
-        el.style.transform = `perspective(900px) rotateY(${x * 8}deg) rotateX(${-y * 8}deg)`;
-      });
-      el.addEventListener("mouseleave", () => el.style.transform = "");
-    });
-    /* magnetic buttons */
-    $$(".magnetic").forEach(el => {
-      el.addEventListener("mousemove", e => {
-        const r = el.getBoundingClientRect();
-        el.style.transform = `translate(${(e.clientX - r.left - r.width / 2) * .2}px, ${(e.clientY - r.top - r.height / 2) * .3}px)`;
-      });
-      el.addEventListener("mouseleave", () => el.style.transform = "");
-    });
-  }
-
-  /* ---------- LIGHTBOX ---------- */
-  const lb = $("#lightbox"), lbImg = $("img", lb), figs = $$(".g img");
-  let idx = 0;
-  const show = i => { idx = (i + figs.length) % figs.length; lbImg.src = figs[idx].src; lbImg.alt = figs[idx].alt; };
-  figs.forEach((img, i) => img.parentElement.addEventListener("click", () => { show(i); lb.hidden = false; document.body.style.overflow = "hidden"; }));
-  const close = () => { lb.hidden = true; document.body.style.overflow = ""; };
   $(".lightbox__close").addEventListener("click", close);
   $(".lightbox__prev").addEventListener("click", e => { e.stopPropagation(); show(idx - 1); });
   $(".lightbox__next").addEventListener("click", e => { e.stopPropagation(); show(idx + 1); });
   lb.addEventListener("click", e => { if (e.target === lb) close(); });
   addEventListener("keydown", e => {
     if (lb.hidden) return;
-    if (e.key === "Escape") close(); if (e.key === "ArrowLeft") show(idx - 1); if (e.key === "ArrowRight") show(idx + 1);
+    if (e.key === "Escape") close();
+    if (e.key === "ArrowLeft") show(idx - 1);
+    if (e.key === "ArrowRight") show(idx + 1);
   });
 })();

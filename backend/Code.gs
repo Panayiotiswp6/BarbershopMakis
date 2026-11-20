@@ -47,7 +47,7 @@ const CONFIG = {
   // 0 = Κυριακή … 6 = Σάββατο  (ίδιο με assets/js/config.js)
   HOURS: {
     0: [],
-    1: [["09:00", "15:00"]],
+    1: [],                                   // Δευτέρα: κλειστά
     2: [["09:00", "14:00"], ["17:00", "21:00"]],
     3: [["09:00", "15:00"]],
     4: [["09:00", "14:00"], ["17:00", "21:00"]],
@@ -61,7 +61,7 @@ const DAYS = ["Κυριακή", "Δευτέρα", "Τρίτη", "Τετάρτη"
 const MONTHS_GEN = ["Ιανουαρίου", "Φεβρουαρίου", "Μαρτίου", "Απριλίου", "Μαΐου", "Ιουνίου", "Ιουλίου", "Αυγούστου", "Σεπτεμβρίου", "Οκτωβρίου", "Νοεμβρίου", "Δεκεμβρίου"];
 
 /* ======================= HTTP ======================= */
-const VERSION = 3;
+const VERSION = 4;
 
 function doGet(e) {
   const p = (e && e.parameter) || {};
@@ -273,7 +273,7 @@ function emailCustomer(b) {
   const html = mailShell(`
     <h2 style="margin:0 0 6px;font-size:26px">Το ραντεβού σου επιβεβαιώθηκε ✂️</h2>
     <p style="color:#555;margin:0 0 20px">Γεια σου ${esc(b.name.split(" ")[0])}, σε περιμένουμε!</p>
-    ${table(b)}
+    ${table(b, true)}
     <p style="margin:22px 0 6px">📍 <b>${CONFIG.SHOP_ADDRESS}</b><br>📞 ${CONFIG.SHOP_PHONE}</p>
     <p style="margin:22px 0 0;font-size:13px;color:#777">Δεν μπορείς να έρθεις; <a href="${cancelUrl}" style="color:#a8823a">Ακύρωσε το ραντεβού</a> ή κάλεσέ μας.</p>`);
   const owner = ownerEmail();
@@ -339,10 +339,10 @@ function logMail(b, customer, owner) {
 }
 function isEmail(s) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(s || "")); }
 
-function table(b) {
+function table(b, withCustomer) {
   const row = (k, v) => `<tr><td style="padding:8px 0;color:#777;width:110px">${k}</td><td style="padding:8px 0;font-weight:600">${v}</td></tr>`;
   return `<table style="border-collapse:collapse;width:100%;border-top:1px solid #eee;border-bottom:1px solid #eee">
-    ${row("Υπηρεσία", esc(b.serviceName))}${row("Ημέρα", prettyDate(b.date))}${row("Ώρα", b.time + (b.end ? "–" + b.end : ""))}${b.price ? row("Τιμή", b.price + "€") : ""}</table>`;
+    ${row("Υπηρεσία", esc(b.serviceName))}${row("Ημέρα", prettyDate(b.date))}${row("Ώρα", b.time + (b.end ? "–" + b.end : ""))}${b.price ? row("Τιμή", b.price + "€") : ""}${withCustomer ? row("Όνομα", esc(b.name)) + row("Κινητό", esc(b.phone)) + (b.notes ? row("Σημείωση", esc(b.notes)) : "") : ""}</table>`;
 }
 
 function mailShell(inner) {
